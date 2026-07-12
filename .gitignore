@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.pytest_cache/
+.coverage
+data/uploads/*
+!data/uploads/.gitkeep
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store

@@ -271,6 +271,173 @@ prompt explicitly forbids ranking by document position or chronology, and
 the response is defensively re-sorted server-side by `rank` rather than
 trusting model output order verbatim (`summary_agent.py`).
 
+## Executive Summary — Top-10 Ranking Strategy
+
+The **Executive Summary** ranks changes by **semantic importance**, not chronological order or word count.
+
+This section is intentionally different from a simple change log — it reflects business and architectural priorities, making it useful for product teams deciding what to communicate first.
+
+### Ranking Rubric (Priority Order)
+
+#### Rank 1–3: Business Impact
+Changes that directly affect revenue, customer communication, or quarterly cycles.
+
+- **Pricing rule changes:** new pricing models, margin shifts, cost structure changes
+- **Revenue model shifts:** ACM, maintenance, licensing changes
+- **Customer-facing features:** new capabilities, deprecated features, support model changes
+- **Quarterly release impact:** blocking issues, timeline implications, stakeholder communication required
+
+**Example from FDS:**
+> "Three-phase delivery (A/B/C) replaces single batch approach; introduces real-time QA and API-driven pipeline"
+> 
+> Ranks #1 because: Fundamental workflow transformation; affects all downstream pricing generation, scheduling, and system integration. Required for Q3/Q4 release timeline.
+
+#### Rank 4–7: Workflow & Architecture Impact
+Changes that improve process efficiency, reduce manual work, or restructure systems.
+
+- **Process redesign:** automation scope, manual steps eliminated, cycle time reduction
+- **Tooling & integration:** API connections, system boundaries, build/deploy changes
+- **Team efficiency:** effort reduction, skill distribution, operational overhead
+- **Technical debt:** deprecation cleanup, modernization, scalability improvements
+
+**Example from FDS:**
+> "ACM Generation Automation — Python script refactored to be parameterized; supports multiple currencies without code changes"
+>
+> Ranks #2 because: Unblocks quarterly release cycle; reduces manual intervention from 2 hours to 15 minutes per cycle. Enables on-demand generation.
+
+#### Rank 8–10: Scope & Scale
+Enhancements that extend capability, reduce constraints, or improve edge-case handling.
+
+- **New regions/currencies:** geographic expansion, multi-currency support
+- **New product lines:** expanded scope, added configurations
+- **Technical constraints:** scalability limits, performance thresholds
+- **Edge cases:** handling of special values, error paths, fallback behavior
+
+**Example from FDS:**
+> "Support for new currency variants (GBP, AUD) in addition to USD/EUR"
+>
+> Ranks #9 because: Enables expansion to new markets, but not blocking for current release; implemented via config, not code changes.
+
+### What Top-10 Does NOT Rank By
+
+- ❌ **Document Position** — First-mentioned changes don't rank higher
+- ❌ **Chronological Release** — Older changes don't inherently rank higher
+- ❌ **Word Count** — Longer descriptions don't mean higher importance
+- ❌ **Feature Scope** — Complex changes don't rank higher than simple, impactful ones
+- ❌ **Alphabetical Order** — Pure convenience would defeat the purpose
+
+### How It Works (Technical)
+
+1. **Extraction Phase:** Comparison Agent identifies all DIFF items (changes present in both versions)
+2. **Scoring Phase:** Summary Agent applies ranking rubric, assigns numeric rank 1–10
+3. **Verification Phase:** Server-side defensive re-sort by `rank` field (ensures rank order matches intent)
+4. **Delivery Phase:** API returns Top-10 in rank order; `<10` if fewer unique changes exist
+
+### Output Format
+
+```json
+{
+  "top_important_changes": [
+    {
+      "rank": 1,
+      "title": "Pricing Automation Phase Delivery Restructure",
+      "description": "Three-phase delivery (A/B/C) replaces single batch approach; introduces real-time QA and API-driven pipeline",
+      "ranking_rationale": "Fundamental workflow transformation; affects all downstream pricing generation, scheduling, and system integration",
+      "impact_category": "business_impact",
+      "source_diff_ids": ["diff_chunk_12", "diff_chunk_45"]
+    },
+    {
+      "rank": 2,
+      "title": "ACM Generation Automation",
+      "description": "Python script refactored to be parameterized; supports multiple currencies without code changes",
+      "ranking_rationale": "Unblocks quarterly release cycle; reduces manual intervention from 2 hours to 15 minutes",
+      "impact_category": "workflow_impact",
+      "source_diff_ids": ["diff_chunk_78"]
+    },
+    // ... up to 10 total
+  ]
+}
+```
+
+Each item includes:
+- **rank** (1–10): position in importance order
+- **title**: short, scannable summary
+- **description**: 1–2 sentences explaining what changed
+- **ranking_rationale**: WHY it ranks at that position (business/architecture/scope reasoning)
+- **impact_category**: enum {business_impact, workflow_impact, scope_scale}
+- **source_diff_ids**: chunk IDs from comparison for traceability
+
+### Example Ranking
+
+For `FDS_PriceBook_Automation_V0.pdf` → `_V5.docx`:
+
+| Rank | Title | Impact Category | Reasoning |
+|------|-------|---|---|
+| 1 | Phase A/B/C Delivery Restructure | business_impact | Affects Q3/Q4 release timeline; required stakeholder communication |
+| 2 | ACM Automation | workflow_impact | Reduces manual effort 2h → 15 min; unblocks on-demand generation |
+| 3 | NA Uplift Parameterization | workflow_impact | Eliminates manual category mapping; enables regional expansion |
+| 4 | Pricing Verification Dashboard | workflow_impact | Replaces manual scrolling; visual QA reduces errors by ~70% |
+| 5 | Agile API Integration | workflow_impact | Eliminates manual picklist sync; single source of truth |
+| 6 | Version Updates Consolidation | workflow_impact | Unifies 3 separate manual files into 1 audit log |
+| 7 | Intelligent Anomaly Detection | scope_scale | Pattern-based pricing validation; catches new class of errors |
+| 8 | Multi-Currency Support Refactoring | scope_scale | Enables EUR/GBP/AUD without code changes; config-driven |
+| 9 | Error-Free Duplicate Detection | scope_scale | ACM conflict resolution now automatic; zero manual intervention |
+| 10 | Eyal's Post-Macro Edits Automation | scope_scale | Cross-category line removal now rules-based; eliminates manual step |
+
+### Rationale Behind This Ranking
+
+**Why is Pricing Automation ranked #1, not #2?**
+
+Both are high-impact, but Phase A/B/C restructure is a *prerequisite* for everything else:
+- Every downstream team needs to understand the new timeline
+- Customer communication strategy depends on it
+- It's a **gating item** for Q3 release planning
+- ACM automation is important, but it's *enabled by* the phase restructure
+
+**Why is Anomaly Detection (#7) ranked higher than Multi-Currency (#8)?**
+
+- Anomaly detection is *proactive* risk mitigation (catches errors before release)
+- Multi-currency is *enabling* for growth (new markets, but not required for current cycle)
+- Ranking rule: **Risk mitigation > expansion** at same scale level
+
+### Integration with API
+
+The `/api/v1/query` endpoint with `query="Give me the executive summary"` returns Top-10 automatically:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "demo",
+    "query": "Give me the executive summary",
+    "document_ids": ["doc_a_id", "doc_b_id"]
+  }'
+
+# Response:
+{
+  "intent": "executive_summary",
+  "summary": {
+    "top_important_changes": [
+      { "rank": 1, ... },
+      { "rank": 2, ... },
+      // ... up to 10
+    ]
+  },
+  "is_grounded": true,
+  "metadata": {
+    "documents_compared": 2,
+    "total_changes_identified": 47,
+    "top_10_coverage": "42% of total changes"
+  }
+}
+```
+
+### See Also
+
+- **AGENTS.md > Summary Agent** — full system prompt and ranking logic
+- **DECISIONS.md D-07** — why we rank by importance rather than chronology
+- **tests/integration/test_summary_agent.py** — ranking edge cases and validation
+
 ## Memory
 
 `ConversationMemoryStore` (`infrastructure/repositories/conversation_memory.py`)

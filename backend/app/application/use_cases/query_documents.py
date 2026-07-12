@@ -13,6 +13,7 @@ import uuid
 from app.application.agents.graph import get_compiled_graph
 from app.application.agents.state import GraphState
 from app.application.dto.schemas import QueryRequest, QueryResponse
+from app.core.config import require_ai_services
 from app.infrastructure.ai.openai_client import OpenAIGateway
 from app.infrastructure.repositories.conversation_memory import ConversationMemoryStore
 
@@ -21,6 +22,7 @@ _memory = ConversationMemoryStore(_llm)
 
 
 async def execute(request: QueryRequest) -> QueryResponse:
+    require_ai_services()
     request_id = str(uuid.uuid4())
     summary, history = _memory.get_context(request.session_id)
 

@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.application.dto.schemas import IngestResponse
 from app.application.use_cases import ingest_document
-from app.domain.exceptions.errors import DomainError
+from app.domain.exceptions.errors import ConfigurationError, DomainError
 
 router = APIRouter(prefix="/api/v1", tags=["ingest"])
 
@@ -33,6 +33,8 @@ async def ingest(
 
     try:
         return await ingest_document.execute(str(dest), document_name, version)
+    except ConfigurationError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except DomainError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     finally:

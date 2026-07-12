@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.application.dto.schemas import QueryRequest, QueryResponse
 from app.application.use_cases import query_documents
-from app.domain.exceptions.errors import DomainError
+from app.domain.exceptions.errors import ConfigurationError, DomainError
 
 router = APIRouter(prefix="/api/v1", tags=["query"])
 
@@ -19,5 +19,7 @@ async def query(request: QueryRequest) -> QueryResponse:
     """
     try:
         return await query_documents.execute(request)
+    except ConfigurationError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except DomainError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e

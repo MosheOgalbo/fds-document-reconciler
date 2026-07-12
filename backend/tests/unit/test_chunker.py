@@ -76,6 +76,34 @@ def test_trailing_period_heading_format_is_recognized():
     assert any("Business Challenge" in b for b in breadcrumbs)
 
 
+def test_numbered_file_hierarchy_table_rows_are_not_headings():
+    """Regression: borderless numbered tables in the sample PDF (File Hierarchy)
+    must stay inside their parent section, not become spurious headings."""
+    pages = [
+        RawPage(
+            page_number=2,
+            text=(
+                "3.2 File Hierarchy\n"
+                "# File Derived From Purpose\n"
+                "1 PM PB (Q2-26v1) PM PB Q2-26v0 Final PM input\n"
+                "2 Macro PB (.xlsm) PM PB v1 Master file\n"
+                "3 Channel PB - ACTS USD Macro PB ROW channel book\n"
+                "Real section body after the table.\n"
+            ),
+        )
+    ]
+    chunks = build_parent_child_chunks(pages, document_id="doc-6", document_name="Spec.pdf", version="v1")
+    parents = [c for c in chunks if c.chunk_type == ChunkType.PARENT]
+    breadcrumbs = [p.section.as_breadcrumb() for p in parents]
+    assert any("File Hierarchy" in b for b in breadcrumbs)
+    assert not any("PM PB (Q2-26v1)" in b for b in breadcrumbs)
+    assert not any("Macro PB (.xlsm)" in b for b in breadcrumbs)
+    assert not any("Channel PB - ACTS USD" in b for b in breadcrumbs)
+    hierarchy_parent = next(p for p in parents if "File Hierarchy" in p.section.as_breadcrumb())
+    assert "PM PB (Q2-26v1)" in hierarchy_parent.content
+    assert "Real section body after the table." in hierarchy_parent.content
+
+
 def test_wrapped_lowercase_body_text_is_not_mistaken_for_a_heading():
     """Regression test: PDF line-wrapping can put a bare number at the start
     of a wrapped sentence fragment (e.g. '15 manual validation rules are

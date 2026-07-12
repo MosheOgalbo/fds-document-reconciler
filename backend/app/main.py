@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.application.dto.schemas import HealthResponse
-from app.core.config import get_settings
+from app.core.config import get_settings, is_openai_configured, is_pinecone_configured
 from app.presentation.api.v1.ingest_routes import router as ingest_router
 from app.presentation.api.v1.query_routes import router as query_router
 from app.presentation.middleware.observability import RequestContextMiddleware
@@ -80,13 +80,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     return response
 
 
-_PLACEHOLDER_VALUES = {"sk-your-key-here", "your-pinecone-key-here"}
-
-
-def _is_configured(value: str) -> bool:
-    return bool(value) and value not in _PLACEHOLDER_VALUES
-
-
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     from app.core.tokens import using_exact_counting
@@ -94,7 +87,7 @@ async def health() -> HealthResponse:
     return HealthResponse(
         status="ok",
         version=app.version,
-        openai_configured=_is_configured(settings.openai_api_key),
-        pinecone_configured=_is_configured(settings.pinecone_api_key),
+        openai_configured=is_openai_configured(settings),
+        pinecone_configured=is_pinecone_configured(settings),
         token_counting="exact" if using_exact_counting() else "approximate",
     )

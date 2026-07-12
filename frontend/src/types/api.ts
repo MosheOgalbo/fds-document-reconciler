@@ -98,6 +98,7 @@ export interface ChatMessage {
   executiveSummary?: ExecutiveSummary | null;
   isGrounded?: boolean;
   warnings?: string[];
+  agentTrace?: string[];
   createdAt: number;
 }
 

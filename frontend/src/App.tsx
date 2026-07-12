@@ -6,6 +6,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { IngestPage } from "@/pages/IngestPage";
 import { ComparePage } from "@/pages/ComparePage";
 import { ChatPage } from "@/pages/ChatPage";
+import { FreeChatPage } from "@/pages/FreeChatPage";
 import { SummaryPage } from "@/pages/SummaryPage";
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
               <Route index element={<IngestPage />} />
               <Route path="compare" element={<ComparePage />} />
               <Route path="chat" element={<ChatPage />} />
+              <Route path="free-chat" element={<FreeChatPage />} />
               <Route path="summary" element={<SummaryPage />} />
             </Route>
           </Routes>

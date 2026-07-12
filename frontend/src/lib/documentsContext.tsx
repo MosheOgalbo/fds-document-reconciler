@@ -59,3 +59,14 @@ export function getSessionId(): string {
   }
   return id;
 }
+
+/** Separate session for Free Chat so memory doesn't mix with scoped Ask page. */
+export function getFreeChatSessionId(): string {
+  const key = "fds-reconcile:free-chat-session-id";
+  let id = localStorage.getItem(key);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(key, id);
+  }
+  return id;
+}

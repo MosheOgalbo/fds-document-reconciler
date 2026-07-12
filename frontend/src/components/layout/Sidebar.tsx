@@ -1,10 +1,11 @@
 import { NavLink } from "react-router-dom";
-import { FileStack, MessagesSquare, GitCompareArrows, ListOrdered } from "lucide-react";
+import { FileStack, MessagesSquare, GitCompareArrows, ListOrdered, Sparkles } from "lucide-react";
 import { useDocuments } from "@/lib/documentsContext";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/", label: "Documents", icon: FileStack, end: true },
+  { to: "/free-chat", label: "Free Chat", icon: Sparkles },
   { to: "/compare", label: "Compare", icon: GitCompareArrows },
   { to: "/chat", label: "Ask", icon: MessagesSquare },
   { to: "/summary", label: "Executive Summary", icon: ListOrdered },

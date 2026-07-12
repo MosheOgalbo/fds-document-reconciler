@@ -14,6 +14,7 @@ import uuid
 from pathlib import Path
 
 from app.application.dto.schemas import IngestResponse
+from app.core.config import require_ai_services
 from app.domain.entities.document import ChunkType
 from app.infrastructure.ai.openai_client import OpenAIGateway
 from app.infrastructure.parsing.chunker import build_parent_child_chunks
@@ -25,6 +26,7 @@ _store = PineconeVectorStore()
 
 
 async def execute(file_path: str, document_name: str, version: str) -> IngestResponse:
+    require_ai_services()
     document_id = str(uuid.uuid4())
 
     pages = parse_document(file_path)

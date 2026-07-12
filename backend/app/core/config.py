@@ -50,3 +50,32 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+_PLACEHOLDER_VALUES = {"sk-your-key-here", "your-pinecone-key-here"}
+
+
+def is_openai_configured(settings: Settings | None = None) -> bool:
+    s = settings or get_settings()
+    return bool(s.openai_api_key) and s.openai_api_key not in _PLACEHOLDER_VALUES
+
+
+def is_pinecone_configured(settings: Settings | None = None) -> bool:
+    s = settings or get_settings()
+    return bool(s.pinecone_api_key) and s.pinecone_api_key not in _PLACEHOLDER_VALUES
+
+
+def require_ai_services() -> None:
+    """Fail fast with a clear message when API keys are missing or still placeholders."""
+    from app.domain.exceptions.errors import ConfigurationError
+
+    missing: list[str] = []
+    if not is_openai_configured():
+        missing.append("OPENAI_API_KEY")
+    if not is_pinecone_configured():
+        missing.append("PINECONE_API_KEY")
+    if missing:
+        keys = " and ".join(missing)
+        raise ConfigurationError(
+            f"{keys} not configured. Copy backend/.env.example to backend/.env and set real values."
+        )

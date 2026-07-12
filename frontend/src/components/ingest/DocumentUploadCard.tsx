@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
-import { UploadCloud, CheckCircle2, FileText, Loader2 } from "lucide-react";
+import { UploadCloud, CheckCircle2, FileText, Loader2, FolderOpen } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,7 @@ export function DocumentUploadCard({
   const { docA, docB, setDocument } = useDocuments();
   const current = label === "A" ? docA : docB;
   const [file, setFile] = React.useState<File | null>(null);
+  const [fileError, setFileError] = React.useState<string | null>(null);
   const [isDragging, setIsDragging] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -56,8 +57,17 @@ export function DocumentUploadCard({
   const onFileSelected = (selected: File | null) => {
     if (!selected) return;
     const ext = selected.name.slice(selected.name.lastIndexOf(".")).toLowerCase();
-    if (!ACCEPTED_EXTENSIONS.includes(ext)) return;
+    if (!ACCEPTED_EXTENSIONS.includes(ext)) {
+      setFileError(`Unsupported file type. Use ${ACCEPTED_EXTENSIONS.join(", ")}.`);
+      return;
+    }
+    setFileError(null);
     setFile(selected);
+  };
+
+  const onBrowseClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    fileInputRef.current?.click();
   };
 
   const onSubmit = (values: FormValues) => mutation.mutate(values);
@@ -85,10 +95,9 @@ export function DocumentUploadCard({
               setIsDragging(false);
               onFileSelected(e.dataTransfer.files?.[0] ?? null);
             }}
-            onClick={() => fileInputRef.current?.click()}
             className={cn(
-              "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed py-8 text-center transition-colors",
-              isDragging ? "border-brass bg-brass-soft" : "border-rule hover:border-ink-faint",
+              "flex flex-col items-center justify-center gap-3 rounded-md border-2 border-dashed py-8 text-center transition-colors",
+              isDragging ? "border-brass bg-brass-soft" : "border-rule",
             )}
           >
             <input
@@ -102,14 +111,23 @@ export function DocumentUploadCard({
               <>
                 <FileText className="text-brass" size={22} />
                 <span className="text-sm font-medium text-ink">{file.name}</span>
+                <span className="text-xs text-ink-soft">
+                  {(file.size / 1024).toFixed(0)} KB · from your computer
+                </span>
               </>
             ) : (
               <>
                 <UploadCloud className="text-ink-faint" size={22} />
-                <span className="text-sm text-ink-soft">Drop a .pdf or .docx, or click to browse</span>
+                <span className="text-sm text-ink-soft">Drag & drop a .pdf or .docx here</span>
               </>
             )}
+            <Button type="button" variant="outline" size="sm" onClick={onBrowseClick}>
+              <FolderOpen size={14} />
+              Browse from computer
+            </Button>
           </div>
+
+          {fileError && <p className="text-xs text-missing">{fileError}</p>}
 
           <div className="grid grid-cols-2 gap-3">
             <div>

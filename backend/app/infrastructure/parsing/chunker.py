@@ -32,6 +32,22 @@ _HEADING_PATTERN = re.compile(
 
 _MAX_HEADING_LINE_LENGTH = 80
 
+# Numbered table rows in borderless PDF tables (e.g. the sample's "File
+# Hierarchy" list) match the heading regex but are not section titles.
+_TABLE_ROW_HINT = re.compile(
+    r"(\.(xlsm|xlsx|pdf|docx)\b"  # file extensions in a "title" → table row
+    r"|\(Q\d"  # quarter version refs like (Q2-26v1)
+    r"|\bPM PB \("
+    r"|\bMacro PB\b"
+    r"|\bChannel PB -"
+    r"|\bACM PB -"
+    r"|\bDistributor PB\b"
+    r"|\+\s*(Python|rate)\b"
+    r"|;\s*$"  # purpose column trailing semicolon from table extraction
+    r")",
+    re.IGNORECASE,
+)
+
 
 def _looks_like_real_heading(title: str, full_line: str) -> bool:
     """
@@ -44,14 +60,16 @@ def _looks_like_real_heading(title: str, full_line: str) -> bool:
     against the actual sample PDF — both cases occur and would otherwise
     corrupt the section hierarchy.
 
-    Two cheap heuristics catch the overwhelming majority of these without
-    needing font-size/layout metadata (which plain text extraction doesn't
-    expose): real headings are short, and their title text starts with a
-    capital letter (mid-sentence wrapped fragments start lowercase).
+    Heuristics (no font-size metadata needed):
+    - real headings are short; table rows often aren't
+    - title starts with a capital letter (wrapped fragments start lowercase)
+    - table rows carry file names, extensions, or quarter-version parentheses
     """
     if len(full_line) > _MAX_HEADING_LINE_LENGTH:
         return False
     if not title[:1].isupper():
+        return False
+    if _TABLE_ROW_HINT.search(title):
         return False
     return True
 

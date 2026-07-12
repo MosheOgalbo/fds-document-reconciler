@@ -367,13 +367,13 @@ cleanly. See `frontend/` for the full source.
 
 ```bash
 cd backend
-pytest -v                    # all 32 tests
+pytest -v                    # all 33 tests
 pytest tests/unit -v         # pure logic, no API keys required
 pytest tests/integration -v  # agent contracts + full-graph e2e via fakes, no API keys required
 pytest tests/api -v          # FastAPI TestClient smoke tests + error-handling regression tests
 ```
 
-32 tests pass, covering: hierarchical chunking (including two regression
+33 tests pass, covering: hierarchical chunking (including three regression
 tests for real bugs found against the actual sample PDF), table Markdown
 formatting, token counting/context-window truncation (with fallback
 verified), prompt-injection screening, citation dedup/verification, the
@@ -400,17 +400,12 @@ results (chunk counts, zero missing embeddings, zero empty-content chunks).
   `GET /health`'s `token_counting` field reports which mode is active. This
   was discovered and verified firsthand: this development sandbox itself
   can't reach that host, so the fallback path is exercised, not just coded.
-- **Heading detection has one confirmed false-positive case**: the sample
-  PDF's "File Hierarchy" table (a borderless, numbered list of 13 rows) is
-  short enough and capitalized enough to pass the heading heuristic and
-  gets misidentified as 12 spurious sub-headings. Fixing this fully would
-  need font-size/layout metadata (not exposed by plain text extraction) or
-  a more elaborate table-vs-heading classifier — flagged here rather than
-  papered over with a fragile ad-hoc rule. Two other real bugs found via
-  the same testing process (trailing-period headings like "1. Executive
-  Summary" being missed entirely, and line-wrapped body text starting with
-  a bare number being falsely detected as a heading) **were** fixed and
-  covered with regression tests.
+- **Heading detection** uses text heuristics (length, capitalization, table-row
+  patterns such as file extensions and quarter-version parentheses). The
+  sample PDF's borderless "File Hierarchy" numbered list is correctly kept
+  inside its parent section — covered by a regression test. Residual edge
+  cases would need font-size/layout metadata from `pdfplumber` character
+  bounding boxes.
 - **DOCX page numbers are approximate** — `python-docx`'s object model has
   no native page-boundary concept; citations for DOCX sources rely
   primarily on section/heading, with page treated as best-effort.
@@ -438,9 +433,8 @@ results (chunk counts, zero missing embeddings, zero empty-content chunks).
 - Redis-backed memory + rate limiting for multi-instance deployments.
 - An offline RAG evaluation harness with a golden Q&A set for this exact
   Price Book document pair.
-- The React frontend (diff table view, chat UI, executive summary
-  dashboard) — backend was prioritized per the assignment's own
-  development order.
+- A dedicated cross-encoder reranker evaluation against the current
+  lexical-overlap stand-in on the sample document pair.
 
 ## Project documents
 

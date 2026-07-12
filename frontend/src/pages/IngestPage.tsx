@@ -13,9 +13,9 @@ export function IngestPage() {
       <header>
         <h1 className="text-2xl font-semibold">Load your documents</h1>
         <p className="mt-1 text-sm text-ink-soft">
-          Ingest the older version as Document A and the newer version as Document B. Both PDF and
-          DOCX are supported — headings, section hierarchy, and tables are preserved for citation
-          accuracy.
+          Ingest the older version as Document A and the newer version as Document B. Upload from
+          your computer (browse or drag-and-drop). Both PDF and DOCX are supported — headings,
+          section hierarchy, and tables are preserved for citation accuracy.
         </p>
       </header>
 
@@ -30,7 +30,12 @@ export function IngestPage() {
             Both documents are ready. Compare them, ask questions, or generate the executive summary.
           </p>
           <div className="flex gap-2">
-            <Link to="/compare">
+            <Link to="/free-chat">
+            <Button variant="outline" size="sm">
+              Free chat
+            </Button>
+          </Link>
+          <Link to="/compare">
               <Button variant="brass" size="sm">
                 Compare <ArrowRight size={14} />
               </Button>

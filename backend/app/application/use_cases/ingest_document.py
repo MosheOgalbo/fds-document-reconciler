@@ -16,13 +16,20 @@ from pathlib import Path
 from app.application.dto.schemas import IngestResponse
 from app.core.config import require_ai_services
 from app.domain.entities.document import ChunkType
-from app.infrastructure.ai.openai_client import OpenAIGateway
+from app.infrastructure.ai.llm_gateway import get_llm_gateway
 from app.infrastructure.parsing.chunker import build_parent_child_chunks
 from app.infrastructure.parsing.parsers import parse_document
 from app.infrastructure.vectordb.pinecone_client import PineconeVectorStore
 
-_llm = OpenAIGateway()
 _store = PineconeVectorStore()
+_llm = None
+
+
+def _get_llm():
+    global _llm
+    if _llm is None:
+        _llm = get_llm_gateway()
+    return _llm
 
 
 async def execute(file_path: str, document_name: str, version: str) -> IngestResponse:
@@ -38,7 +45,7 @@ async def execute(file_path: str, document_name: str, version: str) -> IngestRes
     batch_size = 100
     for i in range(0, len(chunks), batch_size):
         batch = chunks[i : i + batch_size]
-        embeddings = await _llm.embed([c.content for c in batch])
+        embeddings = await _get_llm().embed([c.content for c in batch])
         for chunk, embedding in zip(batch, embeddings):
             chunk.embedding = embedding
 

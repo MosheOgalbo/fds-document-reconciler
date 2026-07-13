@@ -14,17 +14,29 @@ from app.application.agents.graph import get_compiled_graph
 from app.application.agents.state import GraphState
 from app.application.dto.schemas import QueryRequest, QueryResponse
 from app.core.config import require_ai_services
-from app.infrastructure.ai.openai_client import OpenAIGateway
+from app.infrastructure.ai.llm_gateway import get_llm_gateway
 from app.infrastructure.repositories.conversation_memory import ConversationMemoryStore
+from app.infrastructure.repositories.query_cache import get_cached, set_cached
 
-_llm = OpenAIGateway()
-_memory = ConversationMemoryStore(_llm)
+_memory: ConversationMemoryStore | None = None
+
+
+def _get_memory() -> ConversationMemoryStore:
+    global _memory
+    if _memory is None:
+        _memory = ConversationMemoryStore(get_llm_gateway())
+    return _memory
 
 
 async def execute(request: QueryRequest) -> QueryResponse:
     require_ai_services()
+
+    cached = get_cached(request.query, request.document_ids)
+    if cached:
+        return QueryResponse(**cached)
+
     request_id = str(uuid.uuid4())
-    summary, history = _memory.get_context(request.session_id)
+    summary, history = _get_memory().get_context(request.session_id)
 
     initial_state: GraphState = {
         "user_query": request.query,
@@ -38,7 +50,7 @@ async def execute(request: QueryRequest) -> QueryResponse:
     graph = get_compiled_graph()
     final_state: GraphState = await graph.ainvoke(initial_state)
 
-    await _memory.add_turn(request.session_id, "user", request.query)
+    await _get_memory().add_turn(request.session_id, "user", request.query)
 
     intent = final_state["intent"]
     comparison_dict = None
@@ -52,9 +64,9 @@ async def execute(request: QueryRequest) -> QueryResponse:
     else:
         answer_text = final_state.get("final_answer") or final_state.get("draft_answer", "")
 
-    await _memory.add_turn(request.session_id, "assistant", answer_text)
+    await _get_memory().add_turn(request.session_id, "assistant", answer_text)
 
-    return QueryResponse(
+    response = QueryResponse(
         request_id=request_id,
         intent=intent,
         answer=answer_text,
@@ -66,6 +78,8 @@ async def execute(request: QueryRequest) -> QueryResponse:
         warnings=final_state.get("grounding_warnings", []),
         agent_trace=final_state.get("agent_trace", []),
     )
+    set_cached(request.query, request.document_ids, response.model_dump())
+    return response
 
 
 def _render_comparison_as_text(state: GraphState) -> str:

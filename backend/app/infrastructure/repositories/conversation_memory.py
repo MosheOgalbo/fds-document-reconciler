@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 
 from app.application.agents.state import ConversationTurn
 from app.core.config import get_settings
-from app.infrastructure.ai.openai_client import OpenAIGateway
+from app.infrastructure.ai.llm_gateway import LLMGateway
 
 _SUMMARIZE_SCHEMA = {
     "type": "object",
@@ -39,7 +39,7 @@ class _Session:
 
 
 class ConversationMemoryStore:
-    def __init__(self, llm: OpenAIGateway):
+    def __init__(self, llm: LLMGateway):
         self._llm = llm
         self._settings = get_settings()
         self._sessions: dict[str, _Session] = {}

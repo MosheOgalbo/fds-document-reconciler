@@ -12,7 +12,7 @@ raw text.
 from __future__ import annotations
 
 from app.application.agents.state import GraphState
-from app.infrastructure.ai.openai_client import OpenAIGateway
+from app.infrastructure.ai.llm_gateway import LLMGateway
 from app.infrastructure.security.prompt_injection import wrap_untrusted_content
 
 _SUMMARY_SCHEMA = {
@@ -75,7 +75,7 @@ doesn't support a section, say so plainly rather than inventing content."""
 
 
 class SummaryAgent:
-    def __init__(self, llm: OpenAIGateway):
+    def __init__(self, llm: LLMGateway):
         self._llm = llm
 
     async def run(self, state: GraphState) -> GraphState:
@@ -92,19 +92,30 @@ class SummaryAgent:
 
         context = wrap_untrusted_content("summary_source_material", source)
 
-        result = await self._llm.chat_json(
-            system_prompt=_SYSTEM_PROMPT,
-            user_prompt=context,
-            json_schema=_SUMMARY_SCHEMA,
-            schema_name="executive_summary",
-            model_tier="smart",
-        )
+        try:
+            result = await self._llm.chat_json(
+                system_prompt=_SYSTEM_PROMPT,
+                user_prompt=context,
+                json_schema=_SUMMARY_SCHEMA,
+                schema_name="executive_summary",
+                model_tier="smart",
+            )
+        except Exception:
+            from app.application.fallback.deterministic import deterministic_executive_summary
+
+            report = state.get("comparison_report")
+            if report is None:
+                from app.domain.entities.document import ComparisonReport
+
+                report = ComparisonReport(missing=[], diff=[], match=[])
+            result = deterministic_executive_summary(report)
 
         # Defensive sort: even though the prompt asks for rank order, don't
         # trust model output ordering blindly — sort explicitly by the rank
         # field so the API contract is guaranteed regardless.
+        result.setdefault("top_important_changes", [])
         result["top_important_changes"] = sorted(
-            result["top_important_changes"], key=lambda c: c["rank"]
+            result["top_important_changes"], key=lambda c: c.get("rank", 999)
         )
 
         state["executive_summary"] = result

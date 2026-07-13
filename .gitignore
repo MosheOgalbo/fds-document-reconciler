@@ -2,12 +2,26 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-.env
 .pytest_cache/
 .coverage
-data/uploads/*
-!data/uploads/.gitkeep
 node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
+
+# Local env files — never commit secrets (templates *.example are OK)
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Runtime data
+backend/data/uploads/*
+!backend/data/uploads/.gitkeep
+backend/data/query_cache/
+backend/data/mock_vectors.json

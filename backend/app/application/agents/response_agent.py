@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from app.application.agents.state import GraphState
 from app.domain.entities.document import Citation
-from app.infrastructure.ai.openai_client import OpenAIGateway
+from app.infrastructure.ai.llm_gateway import LLMGateway
 from app.infrastructure.security.prompt_injection import wrap_untrusted_content
 
 _RESPONSE_SCHEMA = {
@@ -67,7 +67,7 @@ Rules:
 
 
 class ResponseAgent:
-    def __init__(self, llm: OpenAIGateway):
+    def __init__(self, llm: LLMGateway):
         self._llm = llm
 
     async def run(self, state: GraphState) -> GraphState:
@@ -81,29 +81,40 @@ class ResponseAgent:
 
         user_prompt = f"{history_text}\n\nCurrent question: {state['user_query']}\n\n{context}"
 
-        result = await self._llm.chat_json(
-            system_prompt=_SYSTEM_PROMPT,
-            user_prompt=user_prompt,
-            json_schema=_RESPONSE_SCHEMA,
-            schema_name="grounded_response",
-            model_tier="smart",
-        )
-
-        state["draft_answer"] = (
-            result["answer"] if not result["insufficient_information"]
-            else "I don't have enough information in the retrieved documents to answer this reliably."
-        )
-        state["draft_citations"] = [
-            Citation(
-                document_name=c["document_name"],
-                version=c["version"],
-                page_number=c["page_number"],
-                section=c["section"],
-                chunk_id=c["chunk_id"],
-                confidence=c["confidence"],
-                quoted_snippet=c.get("quoted_snippet", ""),
+        try:
+            result = await self._llm.chat_json(
+                system_prompt=_SYSTEM_PROMPT,
+                user_prompt=user_prompt,
+                json_schema=_RESPONSE_SCHEMA,
+                schema_name="grounded_response",
+                model_tier="smart",
             )
-            for c in result["citations"]
-        ]
+
+            result.setdefault("citations", [])
+            result.setdefault("insufficient_information", False)
+            result.setdefault("answer", "")
+
+            state["draft_answer"] = (
+                result["answer"] if not result["insufficient_information"]
+                else "I don't have enough information in the retrieved documents to answer this reliably."
+            )
+            state["draft_citations"] = [
+                Citation(
+                    document_name=c["document_name"],
+                    version=c["version"],
+                    page_number=c["page_number"],
+                    section=c["section"],
+                    chunk_id=c["chunk_id"],
+                    confidence=c["confidence"],
+                    quoted_snippet=c.get("quoted_snippet", ""),
+                )
+                for c in result["citations"]
+            ]
+        except Exception:
+            from app.application.fallback.deterministic import deterministic_answer
+
+            answer, citations = deterministic_answer(state.get("user_query", ""), state.get("retrieved_chunks", []))
+            state["draft_answer"] = answer
+            state["draft_citations"] = citations
         state.setdefault("agent_trace", []).append("response_agent:drafted")
         return state

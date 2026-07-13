@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from app.application.agents.state import GraphState
 from app.domain.entities.document import ComparisonReport, DiffItem, MatchItem, MissingItem
-from app.infrastructure.ai.openai_client import OpenAIGateway
+from app.infrastructure.ai.llm_gateway import LLMGateway
 from app.infrastructure.security.prompt_injection import wrap_untrusted_content
 
 _COMPARISON_SCHEMA = {
@@ -114,26 +114,44 @@ Rules:
 
 
 class ComparisonAgent:
-    def __init__(self, llm: OpenAIGateway):
+    def __init__(self, llm: LLMGateway):
         self._llm = llm
 
     async def run(self, state: GraphState) -> GraphState:
         context = wrap_untrusted_content("retrieved_comparison_context", state.get("expanded_context", ""))
         query = state["user_query"]
 
-        result = await self._llm.chat_json(
-            system_prompt=_SYSTEM_PROMPT,
-            user_prompt=f"User's comparison focus: {query}\n\n{context}",
-            json_schema=_COMPARISON_SCHEMA,
-            schema_name="comparison_report",
-            model_tier="smart",
-        )
+        try:
+            result = await self._llm.chat_json(
+                system_prompt=_SYSTEM_PROMPT,
+                user_prompt=f"User's comparison focus: {query}\n\n{context}",
+                json_schema=_COMPARISON_SCHEMA,
+                schema_name="comparison_report",
+                model_tier="smart",
+            )
 
-        report = ComparisonReport(
-            missing=[MissingItem(**row) for row in result["missing"]],
-            diff=[DiffItem(**row) for row in result["diff"]],
-            match=[MatchItem(**row) for row in result["match"]],
-        )
+            result.setdefault("missing", [])
+            result.setdefault("diff", [])
+            result.setdefault("match", [])
+
+            report = ComparisonReport(
+                missing=[MissingItem(**row) for row in result["missing"]],
+                diff=[DiffItem(**row) for row in result["diff"]],
+                match=[MatchItem(**row) for row in result["match"]],
+            )
+            # If the model returned an overly-sparse comparison (common under rate-limit degradation),
+            # fall back to deterministic extraction so the UI shows something actionable.
+            if len(report.diff) == 0:
+                from app.application.fallback.deterministic import deterministic_compare
+
+                report = deterministic_compare(state.get("retrieved_chunks", []))
+                state.setdefault("agent_trace", []).append("comparison_agent:fallback=deterministic_sparse")
+        except Exception:
+            # LLM-free fallback (e.g., rate limit / outage)
+            from app.application.fallback.deterministic import deterministic_compare
+
+            report = deterministic_compare(state.get("retrieved_chunks", []))
+            state.setdefault("agent_trace", []).append("comparison_agent:fallback=deterministic_error")
 
         state["comparison_report"] = report
         state.setdefault("agent_trace", []).append(

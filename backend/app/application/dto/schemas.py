@@ -38,6 +38,8 @@ class IngestResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     version: str
-    openai_configured: bool
-    pinecone_configured: bool
+    ai_provider: str = "none"
+    gemini_configured: bool = False
+    openai_configured: bool = False
+    pinecone_configured: bool = False
     token_counting: str  # "exact" (tiktoken) or "approximate" (fallback)

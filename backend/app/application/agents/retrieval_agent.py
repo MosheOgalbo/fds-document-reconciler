@@ -17,14 +17,14 @@ import logging
 from app.application.agents.state import GraphState
 from app.core.config import get_settings
 from app.core.tokens import truncate_to_token_budget
-from app.infrastructure.ai.openai_client import OpenAIGateway
+from app.infrastructure.ai.llm_gateway import LLMGateway
 from app.infrastructure.vectordb.pinecone_client import PineconeVectorStore
 
 logger = logging.getLogger(__name__)
 
 
 class RetrievalAgent:
-    def __init__(self, llm: OpenAIGateway, vector_store: PineconeVectorStore):
+    def __init__(self, llm: LLMGateway, vector_store: PineconeVectorStore):
         self._llm = llm
         self._store = vector_store
         self._settings = get_settings()
@@ -33,14 +33,36 @@ class RetrievalAgent:
         query = state["user_query"]
         document_ids = state.get("document_ids") or None
 
-        [query_embedding] = await self._llm.embed([query])
+        try:
+            [query_embedding] = await self._llm.embed([query])
+            hits = self._store.query(
+                query_embedding=query_embedding,
+                top_k=self._settings.retrieval_top_k,
+                document_ids=document_ids,
+                chunk_type="child",
+            )
+        except Exception as e:
+            # LLM-free fallback: scan the local mock index and rank by lexical overlap.
+            logger.warning("Embedding failed; falling back to lexical retrieval: %s", e)
+            hits = self._store.lexical_query(
+                query=query,
+                top_k=self._settings.retrieval_top_k,
+                document_ids=document_ids,
+                chunk_type="child",
+            )
 
-        hits = self._store.query(
-            query_embedding=query_embedding,
-            top_k=self._settings.retrieval_top_k,
-            document_ids=document_ids,
-            chunk_type="child",
-        )
+        # Ensure cross-doc workflows have evidence from BOTH docs when possible.
+        if document_ids and len(document_ids) == 2:
+            present = {h.get("metadata", {}).get("document_id") for h in hits}
+            missing_docs = [d for d in document_ids if d not in present]
+            for missing_doc_id in missing_docs:
+                extra = self._store.lexical_query(
+                    query=query,
+                    top_k=max(6, self._settings.rerank_top_n),
+                    document_ids=[missing_doc_id],
+                    chunk_type="child",
+                )
+                hits.extend(extra)
 
         reranked = self._rerank(query, hits)[: self._settings.rerank_top_n]
 

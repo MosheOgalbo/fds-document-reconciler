@@ -10,14 +10,14 @@ export function AppShell() {
   const isFreeChat = location.pathname === "/free-chat";
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen items-stretch">
       <Sidebar />
-      <main className="flex min-h-screen flex-1 flex-col overflow-hidden">
+      <main className="flex min-h-screen flex-1 flex-col">
         <ConfigurationBanner />
         <div
           className={cn(
             "mx-auto flex w-full flex-1 flex-col",
-            isFreeChat ? "max-w-4xl px-5 py-5" : "max-w-5xl overflow-y-auto px-8 py-10",
+            isFreeChat ? "max-w-4xl px-5 py-5" : "max-w-5xl px-8 py-10",
           )}
         >
           <Outlet />

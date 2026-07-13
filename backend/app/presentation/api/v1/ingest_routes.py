@@ -37,5 +37,10 @@ async def ingest(
         raise HTTPException(status_code=503, detail=str(e)) from e
     except DomainError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="AI provider is temporarily unavailable (rate limit or service outage). Please try again in a moment.",
+        )
     finally:
         dest.unlink(missing_ok=True)

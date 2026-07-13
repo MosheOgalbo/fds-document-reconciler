@@ -78,9 +78,9 @@ export function ChatPanel() {
       <div className="flex items-center justify-between border-b border-rule px-5 py-3">
         <Tabs value={scope} onValueChange={(v) => setScope(v as Scope)}>
           <TabsList>
-            <TabsTrigger value="A">Document A</TabsTrigger>
-            <TabsTrigger value="B">Document B</TabsTrigger>
-            <TabsTrigger value="cross">Cross-document</TabsTrigger>
+            <TabsTrigger value="A" disabled={!docA}>Document A</TabsTrigger>
+            <TabsTrigger value="B" disabled={!docB}>Document B</TabsTrigger>
+            <TabsTrigger value="cross" disabled={!docA || !docB}>Cross-document</TabsTrigger>
           </TabsList>
         </Tabs>
         <span className="font-mono text-[11px] text-ink-faint">{documentIds.length} doc(s) in scope</span>

@@ -15,7 +15,7 @@ export function Sidebar() {
   const { docA, docB } = useDocuments();
 
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col bg-ink text-paper">
+    <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col bg-ink text-paper">
       <div className="px-5 py-6">
         <div className="font-display text-xl font-semibold tracking-tight">Reconcile</div>
         <div className="mt-1 text-xs text-paper/50">FDS Document Reconciliation</div>

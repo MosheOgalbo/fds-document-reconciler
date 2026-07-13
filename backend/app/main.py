@@ -7,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.application.dto.schemas import HealthResponse
-from app.core.config import get_settings, is_openai_configured, is_pinecone_configured
+from app.core.config import get_settings, is_gemini_configured, is_openai_configured, is_pinecone_configured
+from app.infrastructure.ai.llm_gateway import get_ai_provider_name
 from app.presentation.api.v1.ingest_routes import router as ingest_router
 from app.presentation.api.v1.query_routes import router as query_router
 from app.presentation.middleware.observability import RequestContextMiddleware
@@ -87,6 +88,8 @@ async def health() -> HealthResponse:
     return HealthResponse(
         status="ok",
         version=app.version,
+        ai_provider=get_ai_provider_name(),
+        gemini_configured=is_gemini_configured(settings),
         openai_configured=is_openai_configured(settings),
         pinecone_configured=is_pinecone_configured(settings),
         token_counting="exact" if using_exact_counting() else "approximate",

@@ -40,7 +40,7 @@ from app.application.agents.router_agent import RouterAgent
 from app.application.agents.state import GraphState
 from app.application.agents.summary_agent import SummaryAgent
 from app.application.agents.validation_agent import ValidationAgent
-from app.infrastructure.ai.openai_client import OpenAIGateway
+from app.infrastructure.ai.llm_gateway import LLMGateway, get_llm_gateway
 from app.infrastructure.vectordb.pinecone_client import PineconeVectorStore
 
 
@@ -56,7 +56,7 @@ def _route_after_comparison(state: GraphState) -> str:
 
 
 def build_graph():
-    llm = OpenAIGateway()
+    llm = get_llm_gateway()
     store = PineconeVectorStore()
 
     router = RouterAgent(llm)

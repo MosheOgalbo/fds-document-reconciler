@@ -39,10 +39,12 @@ export function TabsTrigger({
   value,
   className,
   children,
+  disabled,
 }: {
   value: string;
   className?: string;
   children: React.ReactNode;
+  disabled?: boolean;
 }) {
   const ctx = React.useContext(TabsContext);
   if (!ctx) throw new Error("TabsTrigger must be used within Tabs");
@@ -50,11 +52,14 @@ export function TabsTrigger({
   return (
     <button
       role="tab"
+      type="button"
       aria-selected={isActive}
-      onClick={() => ctx.setValue(value)}
+      disabled={disabled}
+      onClick={() => !disabled && ctx.setValue(value)}
       className={cn(
         "rounded px-3 py-1.5 text-sm font-medium transition-colors",
         isActive ? "bg-white text-ink shadow-sm" : "text-ink-soft hover:text-ink",
+        disabled && "cursor-not-allowed opacity-40 hover:text-ink-soft",
         className,
       )}
     >

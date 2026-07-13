@@ -105,6 +105,8 @@ export interface ChatMessage {
 export interface HealthResponse {
   status: string;
   version: string;
+  ai_provider: string;
+  gemini_configured: boolean;
   openai_configured: boolean;
   pinecone_configured: boolean;
   token_counting: "exact" | "approximate";

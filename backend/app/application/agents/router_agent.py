@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 
 from app.application.agents.state import GraphState
-from app.infrastructure.ai.openai_client import OpenAIGateway
+from app.infrastructure.ai.llm_gateway import LLMGateway
 from app.infrastructure.security.prompt_injection import screen_for_injection
 
 logger = logging.getLogger(__name__)
@@ -40,12 +40,33 @@ Classify the user's request into exactly one intent:
 - executive_summary: a request for a high-level summary of changes, business impact,
   or "what changed overall".
 
-Respond ONLY via the provided JSON schema. Do not answer the user's underlying
-question — you only classify it."""
+Respond ONLY with valid JSON containing exactly these keys:
+{"intent": "<one of the four values above>", "rationale": "<short explanation>"}
+Do not answer the user's underlying question — you only classify it."""
+
+_INTENT_ALIASES = {
+    "document_comparison": "compare_documents",
+    "compare": "compare_documents",
+    "comparison": "compare_documents",
+    "summary": "executive_summary",
+    "executive summary": "executive_summary",
+    "single_document_chat": "single_doc_chat",
+    "cross_document_chat": "cross_doc_chat",
+}
+
+def _heuristic_intent(query: str, num_docs: int) -> str:
+    q = query.lower()
+    if any(k in q for k in ["top", "most important", "executive summary", "highlights", "summary", "what changed overall"]):
+        return "executive_summary" if num_docs >= 2 else "single_doc_chat"
+    if any(k in q for k in ["compare", "diff", "difference", "changed", "between versions", "vs"]):
+        return "compare_documents" if num_docs >= 2 else "single_doc_chat"
+    if num_docs >= 2 and any(k in q for k in ["both documents", "across", "between", "in doc a", "in doc b"]):
+        return "cross_doc_chat"
+    return "single_doc_chat"
 
 
 class RouterAgent:
-    def __init__(self, llm: OpenAIGateway):
+    def __init__(self, llm: LLMGateway):
         self._llm = llm
 
     async def run(self, state: GraphState) -> GraphState:
@@ -60,21 +81,28 @@ class RouterAgent:
 
         num_docs = len(state.get("document_ids", []))
 
-        result = await self._llm.chat_json(
-            system_prompt=_SYSTEM_PROMPT,
-            user_prompt=f"Number of documents in scope: {num_docs}\nUser query: {query}",
-            json_schema=_ROUTER_SCHEMA,
-            schema_name="intent_routing",
-            model_tier="fast",  # cheap first-touch classification, not the actual task
-        )
+        try:
+            result = await self._llm.chat_json(
+                system_prompt=_SYSTEM_PROMPT,
+                user_prompt=f"Number of documents in scope: {num_docs}\nUser query: {query}",
+                json_schema=_ROUTER_SCHEMA,
+                schema_name="intent_routing",
+                model_tier="fast",  # cheap first-touch classification, not the actual task
+            )
+        except Exception as e:
+            # Free-tier APIs can rate-limit; routing must still work.
+            logger.warning("Router LLM call failed; falling back to heuristics: %s", e)
+            result = {"intent": _heuristic_intent(query, num_docs), "rationale": "heuristic fallback (LLM unavailable)"}
 
         # Guardrail: if only one document is in scope, cross-doc/compare
         # intents are impossible regardless of what the LLM guessed.
-        intent = result["intent"]
-        if num_docs < 2 and intent in ("cross_doc_chat", "compare_documents"):
+        intent = _INTENT_ALIASES.get(result.get("intent", ""), result.get("intent", "single_doc_chat"))
+        if intent not in ("single_doc_chat", "cross_doc_chat", "compare_documents", "executive_summary"):
+            intent = "single_doc_chat"
+        if num_docs < 2 and intent in ("cross_doc_chat", "compare_documents", "executive_summary"):
             intent = "single_doc_chat"
 
         state["intent"] = intent  # type: ignore[typeddict-item]
-        state["routing_rationale"] = result["rationale"]
+        state["routing_rationale"] = result.get("rationale", "")
         state.setdefault("agent_trace", []).append(f"router_agent:intent={intent}")
         return state

@@ -7,7 +7,7 @@ export function ConfigurationBanner() {
     queryKey: ["health"],
     queryFn: checkHealth,
     retry: false,
-    refetchInterval: 30_000, // keep checking — a common flow is: start app, add keys, restart backend
+    refetchInterval: 30_000,
   });
 
   if (isError) {
@@ -15,8 +15,8 @@ export function ConfigurationBanner() {
       <div className="flex items-center gap-2 border-b border-missing/30 bg-missing-soft px-6 py-2.5 text-sm text-missing">
         <WifiOff size={15} className="shrink-0" />
         <span>
-          Can't reach the backend at <code className="font-mono">VITE_API_BASE_URL</code>. Is it
-          running? See <code className="font-mono">backend/README</code> — <code>uvicorn app.main:app --reload --port 8000</code>.
+          Can't reach the backend at <code className="font-mono">http://localhost:8000</code>. Run{" "}
+          <code className="font-mono">docker compose up --build</code> from the project root.
         </span>
       </div>
     );
@@ -24,22 +24,20 @@ export function ConfigurationBanner() {
 
   if (!data) return null;
 
-  const missing: string[] = [];
-  if (!data.openai_configured) missing.push("OPENAI_API_KEY");
-  if (!data.pinecone_configured) missing.push("PINECONE_API_KEY");
+  if (!data.gemini_configured && !data.openai_configured) {
+    return (
+      <div className="flex items-center gap-2 border-b border-diff/30 bg-diff-soft px-6 py-2.5 text-sm text-diff">
+        <AlertTriangle size={15} className="shrink-0" />
+        <span>
+          Backend is running but <strong>GEMINI_API_KEY</strong> is missing. Get a free key at{" "}
+          <a href="https://aistudio.google.com/apikey" className="underline" target="_blank" rel="noreferrer">
+            Google AI Studio
+          </a>
+          , add it to <code className="font-mono">backend/.env</code>, and restart Docker.
+        </span>
+      </div>
+    );
+  }
 
-  if (missing.length === 0) return null;
-
-  return (
-    <div className="flex items-center gap-2 border-b border-diff/30 bg-diff-soft px-6 py-2.5 text-sm text-diff">
-      <AlertTriangle size={15} className="shrink-0" />
-      <span>
-        Backend is running but not fully configured — <strong>{missing.join(" and ")}</strong>{" "}
-        {missing.length > 1 ? "are" : "is"} missing. Add{" "}
-        {missing.length > 1 ? "them" : "it"} to <code className="font-mono">backend/.env</code>{" "}
-        (copy from <code className="font-mono">backend/.env.example</code>) and restart the backend.
-        Ingestion and queries will fail until this is set.
-      </span>
-    </div>
-  );
+  return null;
 }

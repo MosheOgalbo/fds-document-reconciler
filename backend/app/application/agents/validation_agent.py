@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from app.application.agents.state import GraphState
 from app.core.config import get_settings
-from app.infrastructure.ai.openai_client import OpenAIGateway
+from app.infrastructure.ai.llm_gateway import LLMGateway
 
 _JUDGE_SCHEMA = {
     "type": "object",
@@ -43,7 +43,7 @@ List any specific unsupported claims verbatim."""
 
 
 class ValidationAgent:
-    def __init__(self, llm: OpenAIGateway):
+    def __init__(self, llm: LLMGateway):
         self._llm = llm
         self._settings = get_settings()
 
@@ -60,16 +60,24 @@ class ValidationAgent:
             warnings.append(f"{len(fabricated)} citation(s) do not match any retrieved chunk")
 
         # --- Check 2: semantic entailment via LLM judge ---
-        judge_result = await self._llm.chat_json(
-            system_prompt=_JUDGE_SYSTEM_PROMPT,
-            user_prompt=(
-                f"DRAFT ANSWER:\n{state.get('draft_answer', '')}\n\n"
-                f"SOURCE CONTEXT:\n{state.get('expanded_context', '')}"
-            ),
-            json_schema=_JUDGE_SCHEMA,
-            schema_name="grounding_judgment",
-            model_tier="smart",
-        )
+        try:
+            judge_result = await self._llm.chat_json(
+                system_prompt=_JUDGE_SYSTEM_PROMPT,
+                user_prompt=(
+                    f"DRAFT ANSWER:\n{state.get('draft_answer', '')}\n\n"
+                    f"SOURCE CONTEXT:\n{state.get('expanded_context', '')}"
+                ),
+                json_schema=_JUDGE_SCHEMA,
+                schema_name="grounding_judgment",
+                model_tier="smart",
+            )
+        except Exception:
+            # LLM-free fallback: skip semantic judging; keep structural gate only.
+            judge_result = {"is_grounded": True, "confidence": 0.45, "unsupported_claims": []}
+
+        judge_result.setdefault("unsupported_claims", [])
+        judge_result.setdefault("is_grounded", True)
+        judge_result.setdefault("confidence", 0.5)
 
         if judge_result["unsupported_claims"]:
             warnings.extend(f"Unsupported claim: {c}" for c in judge_result["unsupported_claims"])

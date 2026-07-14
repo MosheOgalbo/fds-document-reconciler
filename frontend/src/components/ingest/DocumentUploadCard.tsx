@@ -213,13 +213,19 @@ export function DocumentUploadCard({
 
           <Button type="submit" variant="brass" className="w-full" disabled={!file || mutation.isPending}>
             {mutation.isPending && <Loader2 size={14} className="animate-spin" />}
-            {mutation.isPending ? t("ingest.ingesting") : isReady ? t("ingest.reIngest") : t("ingest.ingestDocument")}
+            {mutation.isPending
+              ? file && (file.size > 80_000 || file.name.toLowerCase().endsWith(".pdf"))
+                ? t("ingest.ingestingLarge")
+                : t("ingest.ingesting")
+              : isReady
+                ? t("ingest.reIngest")
+                : t("ingest.ingestDocument")}
           </Button>
 
           {current && (
-            <dl className="grid grid-cols-3 gap-2 rounded-md bg-paper px-3 py-3 font-mono text-[11px] text-ink-soft">
+            <dl className="grid grid-cols-2 gap-2 rounded-md bg-paper px-3 py-3 font-mono text-[11px] text-ink-soft sm:grid-cols-3">
               <div>
-                <dt className="text-ink-faint">{t("ingest.chunks")}</dt>
+                <dt className="text-ink-faint">{t("ingest.totalChunks")}</dt>
                 <dd className="text-base font-semibold text-ink">{current.chunks_created}</dd>
               </div>
               <div>
@@ -230,7 +236,25 @@ export function DocumentUploadCard({
                 <dt className="text-ink-faint">{t("ingest.child")}</dt>
                 <dd className="text-base font-semibold text-ink">{current.child_chunks}</dd>
               </div>
+              {(current.tables_parsed ?? 0) > 0 && (
+                <>
+                  <div>
+                    <dt className="text-ink-faint">{t("ingest.tables")}</dt>
+                    <dd className="text-base font-semibold text-ink">{current.tables_parsed}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-ink-faint">{t("ingest.tableRows")}</dt>
+                    <dd className="text-base font-semibold text-ink">{current.table_rows_parsed}</dd>
+                  </div>
+                </>
+              )}
             </dl>
+          )}
+
+          {current?.ingest_warning && (
+            <p className="rounded-md border border-diff/30 bg-diff-soft px-3 py-2 text-xs text-diff">
+              {current.ingest_warning}
+            </p>
           )}
         </form>
       </CardContent>

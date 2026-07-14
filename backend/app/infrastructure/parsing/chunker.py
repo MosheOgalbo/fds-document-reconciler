@@ -25,10 +25,17 @@ from dataclasses import dataclass
 
 from app.core.tokens import count_tokens
 from app.domain.entities.document import ChunkType, DocumentChunk, SectionPath
+from app.infrastructure.parsing.table_chunking import (
+    prose_window_child_texts,
+    split_parent_texts,
+    table_row_child_texts,
+)
 
 _HEADING_PATTERN = re.compile(
     r"^(?P<marker>\d+(?:\.\d+)*)\.?\s+(?P<title>\S.*)$"
 )
+
+_MD_HEADING_PATTERN = re.compile(r"^(?P<hashes>#{1,6})\s+(?P<title>\S.+)$")
 
 _MAX_HEADING_LINE_LENGTH = 80
 
@@ -74,6 +81,90 @@ def _looks_like_real_heading(title: str, full_line: str) -> bool:
     return True
 
 
+def _looks_like_markdown_table_header(title: str) -> bool:
+    """PDF table headers are sometimes extracted as '# Col1 Col2 Col3' lines."""
+    words = [w for w in title.split() if w]
+    return len(words) >= 3 and all(w[0].isupper() for w in words)
+
+
+def _parse_heading_line(stripped: str) -> tuple[int, str] | None:
+    """Return (depth, title) when a line is a section heading."""
+    md = _MD_HEADING_PATTERN.match(stripped)
+    if md:
+        title = md.group("title").strip()
+        depth = len(md.group("hashes"))
+        if not title or len(stripped) > _MAX_HEADING_LINE_LENGTH:
+            return None
+        if depth == 1 and _looks_like_markdown_table_header(title):
+            return None
+        return depth, title
+
+    match = _HEADING_PATTERN.match(stripped)
+    if match and _looks_like_real_heading(match.group("title"), stripped):
+        depth = match.group("marker").count(".") + 1
+        title = f"{match.group('marker')} {match.group('title')}"
+        return depth, title
+    return None
+
+
+def _maybe_fallback_page_sections(
+    pages: list[RawPage],
+    sections: list[tuple[SectionPath, str]],
+) -> list[tuple[SectionPath, str]]:
+    """
+    When heading detection collapses a multi-page PDF into one section, fall back
+    to page-level sections so chunk counts reflect the full document.
+    """
+    if len(sections) > 1 or len(pages) < 2:
+        return sections
+
+    total_chars = sum(len(p.text or "") for p in pages)
+    if total_chars < 2000:
+        return sections
+
+    fallback: list[tuple[SectionPath, str]] = []
+    for page in pages:
+        text = (page.text or "").strip()
+        if not text:
+            continue
+        fallback.append(
+            (
+                SectionPath(heading_trail=(f"Page {page.page_number}",), page_number=page.page_number),
+                text,
+            )
+        )
+    return fallback if len(fallback) >= 2 else sections
+
+
+def _maybe_fallback_paragraph_sections(
+    pages: list[RawPage],
+    sections: list[tuple[SectionPath, str]],
+) -> list[tuple[SectionPath, str]]:
+    """
+    Single-page documents (typical DOCX) with no detected headings: split on
+    blank lines when the body is long enough to need multiple chunks.
+    """
+    if len(sections) != 1:
+        return sections
+
+    section_path, text = sections[0]
+    if len(text) < 1200:
+        return sections
+
+    blocks = [b.strip() for b in re.split(r"\n{2,}", text) if b.strip()]
+    if len(blocks) < 3:
+        return sections
+
+    page_number = section_path.page_number or (pages[0].page_number if pages else 1)
+    return [
+        (
+            SectionPath(heading_trail=(f"Section {idx + 1}",), page_number=page_number),
+            block,
+        )
+        for idx, block in enumerate(blocks)
+    ]
+
+
 @dataclass
 class RawPage:
     page_number: int
@@ -115,15 +206,11 @@ def _split_into_sections(pages: list[RawPage]) -> list[tuple[SectionPath, str]]:
     for page in pages:
         for line in page.text.splitlines():
             stripped = line.strip()
-            match = _HEADING_PATTERN.match(stripped)
-            if match and _looks_like_real_heading(match.group("title"), stripped):
-                # Flush the PREVIOUS section using the page it actually
-                # started on, then begin tracking the new section starting
-                # at the current page.
+            parsed = _parse_heading_line(stripped)
+            if parsed:
                 flush()
                 section_start_page = page.page_number
-                depth = match.group("marker").count(".") + 1
-                title = f"{match.group('marker')} {match.group('title')}"
+                depth, title = parsed
                 heading_stack = heading_stack[: depth - 1] + [title]
             else:
                 buffer.append(line)
@@ -142,6 +229,8 @@ def build_parent_child_chunks(
 ) -> list[DocumentChunk]:
     """Returns a flat list of PARENT and CHILD DocumentChunk objects ready for embedding."""
     sections = _split_into_sections(pages)
+    sections = _maybe_fallback_page_sections(pages, sections)
+    sections = _maybe_fallback_paragraph_sections(pages, sections)
     chunks: list[DocumentChunk] = []
     chunk_index = 0
     # Approximate character offset across the concatenated section stream so
@@ -149,21 +238,7 @@ def build_parent_child_chunks(
     char_cursor = 0
 
     for section_path, text in sections:
-        # A section might itself exceed the parent budget (e.g. a big table);
-        # split into multiple parents in that case, each keeping the same
-        # heading trail so citations stay accurate.
-        words = text.split()
-        parent_texts: list[str] = []
-        cur: list[str] = []
-        cur_tokens = 0
-        for w in words:
-            cur.append(w)
-            cur_tokens += max(1, len(w) // 4)
-            if cur_tokens >= parent_token_budget:
-                parent_texts.append(" ".join(cur))
-                cur, cur_tokens = [], 0
-        if cur:
-            parent_texts.append(" ".join(cur))
+        parent_texts = split_parent_texts(text, parent_token_budget, _approx_token_count)
 
         for parent_text in parent_texts:
             parent_id = str(uuid.uuid4())
@@ -184,22 +259,23 @@ def build_parent_child_chunks(
             )
             chunk_index += 1
 
-            # Slide a window over the parent to build children with overlap.
-            p_words = parent_text.split()
-            step = max(1, (child_token_budget - child_overlap_tokens))
-            # convert token budget to an approx word-count window (~0.75 words/token)
-            window_words = max(20, int(child_token_budget * 0.75))
-            step_words = max(10, int(step * 0.75))
+            child_texts: list[str] = []
+            child_texts.extend(table_row_child_texts(parent_text))
+            child_texts.extend(
+                prose_window_child_texts(
+                    parent_text,
+                    child_token_budget=child_token_budget,
+                    child_overlap_tokens=child_overlap_tokens,
+                )
+            )
 
-            i = 0
-            while i < len(p_words):
-                child_words = p_words[i : i + window_words]
-                if not child_words:
-                    break
-                child_text = " ".join(child_words)
-                # Approximate offset within parent by cumulative word lengths.
-                prefix = " ".join(p_words[:i])
-                child_offset = parent_offset + (len(prefix) + (1 if prefix else 0))
+            # Dedupe identical child spans (table rows can overlap prose windows).
+            seen: set[str] = set()
+            for child_text in child_texts:
+                key = child_text.strip()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
                 chunks.append(
                     DocumentChunk(
                         chunk_id=str(uuid.uuid4()),
@@ -212,13 +288,10 @@ def build_parent_child_chunks(
                         parent_chunk_id=parent_id,
                         token_count=_approx_token_count(child_text),
                         chunk_index=chunk_index,
-                        char_offset=child_offset,
+                        char_offset=parent_offset,
                     )
                 )
                 chunk_index += 1
-                if i + window_words >= len(p_words):
-                    break
-                i += step_words
 
             char_cursor = parent_offset + len(parent_text) + 2
 

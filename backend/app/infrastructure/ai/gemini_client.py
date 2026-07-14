@@ -49,7 +49,7 @@ class GeminiGateway:
             return self._settings.gemini_fast_model
         return self._settings.gemini_flash_model
 
-    async def embed(self, texts: list[str]) -> list[list[float]]:
+    async def embed(self, texts: list[str], *, max_attempts: int | None = None) -> list[list[float]]:
         """
         Generate embeddings.
 
@@ -63,7 +63,7 @@ class GeminiGateway:
         headers = {"x-goog-api-key": self._api_key}
 
         out: list[list[float]] = []
-        batch_size = 20
+        batch_size = 8
         async with httpx.AsyncClient(timeout=self._settings.request_timeout_seconds) as client:
             for i in range(0, len(texts), batch_size):
                 batch = texts[i : i + batch_size]
@@ -74,25 +74,28 @@ class GeminiGateway:
                     ]
                 }
                 last_exc: Exception | None = None
-                for attempt in range(self._settings.max_retries):
+                embed_retries = max_attempts if max_attempts is not None else max(self._settings.max_retries, 10)
+                for attempt in range(embed_retries):
                     try:
                         async with _GEMINI_SEMAPHORE:
                             response = await client.post(url, headers=headers, json=payload)
                         response.raise_for_status()
                         data = response.json()
                         out.extend([e["values"] for e in data.get("embeddings", [])])
-                        # Gentle pacing for free-tier rate limits.
-                        await asyncio.sleep(1.0)
+                        # Free-tier Gemini embedding RPM is tight — pace between batches.
+                        await asyncio.sleep(6.0)
                         break
                     except httpx.HTTPStatusError as e:
                         last_exc = e
                         status = e.response.status_code
                         if status in (429, 500, 502, 503, 504):
-                            backoff = _retry_backoff_seconds(attempt, e.response.headers.get("retry-after"), cap=60)
+                            backoff = _retry_backoff_seconds(
+                                attempt, e.response.headers.get("retry-after"), cap=120
+                            )
                             logger.warning(
                                 "Gemini embed retry %d/%d (status=%s) in %ss",
                                 attempt + 1,
-                                self._settings.max_retries,
+                                embed_retries,
                                 status,
                                 backoff,
                             )
@@ -100,6 +103,20 @@ class GeminiGateway:
                             continue
                         raise
                 else:
+                    if isinstance(last_exc, httpx.HTTPStatusError):
+                        from app.domain.exceptions.errors import EmbeddingRateLimitError
+
+                        status = last_exc.response.status_code
+                        if status == 429:
+                            raise EmbeddingRateLimitError(
+                                "Gemini embedding rate limit exceeded while indexing this document. "
+                                "Wait 1–2 minutes and try again, or ingest one document at a time."
+                            ) from last_exc
+                        if status in (500, 502, 503, 504):
+                            raise EmbeddingRateLimitError(
+                                f"Gemini embedding service unavailable (HTTP {status}). "
+                                "Please try again in a few minutes."
+                            ) from last_exc
                     raise last_exc or RuntimeError("Gemini embedding failed")
         return out
 

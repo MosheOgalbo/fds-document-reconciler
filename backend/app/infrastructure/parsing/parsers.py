@@ -18,6 +18,79 @@ from app.infrastructure.parsing.chunker import RawPage
 from app.infrastructure.parsing.table_formatter import table_rows_to_markdown
 
 
+def _docx_heading_prefix(style_name: str) -> str | None:
+    """Map Word paragraph styles to markdown heading markers for the chunker."""
+    if not style_name:
+        return None
+    normalized = style_name.strip().lower()
+    if normalized.startswith("heading"):
+        digits = "".join(ch for ch in style_name if ch.isdigit())
+        level = min(int(digits), 6) if digits else 1
+        return "#" * level + " "
+    if normalized in {"title", "subtitle"}:
+        return "# "
+    return None
+
+
+def _docx_bold_heading_prefix(paragraph) -> str | None:
+    """
+    Many real-world DOCX files (including the challenge brief) use bold body
+    text for section titles instead of Word Heading styles.
+    """
+    runs = [r for r in paragraph.runs if r.text and r.text.strip()]
+    if not runs or not all(r.bold for r in runs):
+        return None
+    text = paragraph.text.strip()
+    if len(text) < 3 or len(text) > 60:
+        return None
+    if text.endswith(":"):
+        return None
+    if "." in text or "!" in text or "?" in text:
+        return None
+    if text.startswith("|") or "{" in text:
+        return None
+    return "# "
+
+
+def _numbered_table_lines(rows: list[list[str]]) -> list[str] | None:
+    """
+    Requirement-style tables with numbered first column (1, 2, 3…) in a
+    two-column layout become section headings. Multi-column data tables
+    (validation rules, specs) stay as markdown tables.
+    """
+    cleaned_rows = [[str(c).strip() for c in row] for row in rows if any(str(c).strip() for c in row)]
+    if not cleaned_rows:
+        return None
+
+    max_cols = max(len(row) for row in cleaned_rows)
+    if max_cols > 2:
+        return None
+
+    header_text = " ".join(cleaned_rows[0]).lower()
+    if any(kw in header_text for kw in ("validation", "component", "field", "action", "checked", "required")):
+        return None
+
+    numbered_rows = [r for r in cleaned_rows if r and r[0].isdigit()]
+    if len(numbered_rows) < 2:
+        return None
+
+    lines: list[str] = []
+    for row in cleaned_rows:
+        if not row or not any(cell for cell in row):
+            continue
+        if row[0].isdigit():
+            body = " ".join(cell for cell in row[1:] if cell).strip()
+            if body:
+                title_hint = " ".join(body.split()[:8])
+                lines.append(f"## {row[0]} {title_hint}")
+                lines.append(body)
+            continue
+        joined = " | ".join(cell for cell in row if cell)
+        if joined:
+            lines.append(joined)
+    return lines or None
+
+
 def parse_pdf(file_path: str | Path) -> list[RawPage]:
     """
     Uses pdfplumber (not pypdf) specifically because it exposes both
@@ -35,7 +108,7 @@ def parse_pdf(file_path: str | Path) -> list[RawPage]:
         pages: list[RawPage] = []
         with pdfplumber.open(str(file_path)) as pdf:
             for i, page in enumerate(pdf.pages, start=1):
-                text = page.extract_text() or ""
+                text = page.extract_text(x_tolerance=2, y_tolerance=3) or ""
 
                 table_blocks = []
                 for raw_table in page.extract_tables() or []:
@@ -103,12 +176,19 @@ def parse_docx(file_path: str | Path) -> list[RawPage]:
             if isinstance(block, Paragraph):
                 text = block.text.strip()
                 if text:
-                    lines.append(text)
+                    prefix = _docx_heading_prefix(getattr(block.style, "name", "") or "")
+                    if not prefix:
+                        prefix = _docx_bold_heading_prefix(block)
+                    lines.append(f"{prefix}{text}" if prefix else text)
             elif isinstance(block, Table):
                 rows = [[cell.text for cell in row.cells] for row in block.rows]
-                md = table_rows_to_markdown(rows)
-                if md:
-                    lines.append(md)
+                numbered = _numbered_table_lines(rows)
+                if numbered:
+                    lines.extend(numbered)
+                else:
+                    md = table_rows_to_markdown(rows)
+                    if md:
+                        lines.append(md)
 
         full_text = "\n".join(lines).strip()
         if not full_text:

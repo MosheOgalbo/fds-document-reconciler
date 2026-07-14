@@ -83,6 +83,10 @@ export interface IngestResponse {
   chunks_created: number;
   parent_chunks: number;
   child_chunks: number;
+  pages_parsed?: number;
+  tables_parsed?: number;
+  table_rows_parsed?: number;
+  ingest_warning?: string | null;
 }
 
 export interface IngestedDocument extends IngestResponse {

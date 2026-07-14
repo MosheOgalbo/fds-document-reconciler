@@ -36,11 +36,28 @@ export async function ingestDocument(
   formData.append("document_name", documentName);
   formData.append("version", version);
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/ingest`, {
-    method: "POST",
-    body: formData,
-  });
-  return handleResponse<IngestResponse>(response);
+  const controller = new AbortController();
+  const timeoutMs = 300_000;
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/ingest`, {
+      method: "POST",
+      body: formData,
+      signal: controller.signal,
+    });
+    return handleResponse<IngestResponse>(response);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError(
+        "Ingestion timed out after 5 minutes. Large PDFs with many tables can take several minutes — try again or check backend logs.",
+        408,
+      );
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 export async function query(request: QueryRequest): Promise<QueryResponse> {

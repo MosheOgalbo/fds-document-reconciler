@@ -143,3 +143,58 @@ def test_wrapped_lowercase_body_text_is_not_mistaken_for_a_heading():
     assert breadcrumbs == ["1. Executive Summary"] or breadcrumbs == ["1 Executive Summary"]
     combined_text = next(c.content for c in chunks if c.chunk_type == ChunkType.PARENT)
     assert "15 manual validation rules" in combined_text
+
+
+def test_page_fallback_when_no_headings_detected():
+    """Multi-page PDFs without numbered headings should still produce multiple parents."""
+    pages = [
+        RawPage(page_number=1, text="Intro body " * 200),
+        RawPage(page_number=2, text="Pricing body " * 200),
+        RawPage(page_number=3, text="Workflow body " * 200),
+    ]
+    chunks = build_parent_child_chunks(pages, document_id="doc-7", document_name="Legacy.pdf", version="v0")
+    parents = [c for c in chunks if c.chunk_type == ChunkType.PARENT]
+    children = [c for c in chunks if c.chunk_type == ChunkType.CHILD]
+    assert len(parents) >= 3
+    assert len(children) >= len(parents)
+    assert all(c.parent_chunk_id for c in children)
+
+
+def test_markdown_headings_from_docx_styles():
+    pages = [
+        RawPage(
+            page_number=1,
+            text="# Executive Summary\nOverview text.\n## Scope\nScope details here.",
+        )
+    ]
+    chunks = build_parent_child_chunks(pages, document_id="doc-8", document_name="Styled.docx", version="v1")
+    parents = [c for c in chunks if c.chunk_type == ChunkType.PARENT]
+    breadcrumbs = [p.section.as_breadcrumb() for p in parents]
+    assert any("Executive Summary" in b for b in breadcrumbs)
+    assert any("Scope" in b for b in breadcrumbs)
+
+
+def test_markdown_table_rows_become_searchable_children():
+    """Each table data row should become its own child chunk with header context."""
+    table = (
+        "| Rule | Field |\n"
+        "| --- | --- |\n"
+        "| CPN format | CPN column |\n"
+        "| Price > 0 | Price column |\n"
+        "| Valid date | Date column |\n"
+    )
+    pages = [RawPage(page_number=1, text="# Validation\nIntro paragraph.\n\n" + table)]
+    chunks = build_parent_child_chunks(pages, document_id="doc-9", document_name="Rules.docx", version="v1")
+    children = [c for c in chunks if c.chunk_type == ChunkType.CHILD]
+
+    row_children = [c for c in children if "CPN format" in c.content or "Price > 0" in c.content]
+    assert len(row_children) >= 1
+    for child in row_children:
+        assert "| Rule | Field |" in child.content
+        assert "| ---" in child.content
+
+    parents = [c for c in chunks if c.chunk_type == ChunkType.PARENT]
+    validation_parent = next(p for p in parents if "Validation" in p.section.as_breadcrumb())
+    assert "| --- | --- |" in validation_parent.content
+    assert validation_parent.content.count("|") >= 6
+

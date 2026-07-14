@@ -33,6 +33,10 @@ class IngestResponse(BaseModel):
     chunks_created: int
     parent_chunks: int
     child_chunks: int
+    pages_parsed: int = 0
+    tables_parsed: int = 0
+    table_rows_parsed: int = 0
+    ingest_warning: Optional[str] = None
 
 
 class HealthResponse(BaseModel):

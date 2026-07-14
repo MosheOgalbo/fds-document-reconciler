@@ -71,6 +71,7 @@
     "versionLabel": "תווית גרסה",
     "versionPlaceholder": "למשל v1",
     "ingesting": "טוען…",
+    "ingestingLarge": "מעבד טבלאות ומטמיע — PDF גדולים עשויים לקחת 2–5 דקות…",
     "reIngest": "טען מחדש",
     "ingestDocument": "טען מסמך",
     "ingestionFailed": "הטעינה נכשלה.",
@@ -79,8 +80,11 @@
     "fileSizeReplace": "{{size}} KB · לחץ או גרור להחלפה",
     "ingested": "{{name}} · {{version}} · נטען",
     "chunks": "קטעים",
-    "parent": "הורה",
-    "child": "ילד"
+    "totalChunks": "סה\"כ",
+    "parent": "קטעי הורה",
+    "child": "קטעי ילד",
+    "tables": "טבלאות",
+    "tableRows": "שורות בטבלאות"
   },
   "compare": {
     "title": "השוואה",

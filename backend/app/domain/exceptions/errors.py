@@ -24,3 +24,7 @@ class PromptInjectionDetectedError(DomainError):
 
 class ConfigurationError(DomainError):
     """Raised on missing/invalid environment configuration at startup."""
+
+
+class EmbeddingRateLimitError(DomainError):
+    """Raised when the embedding provider returns sustained rate-limit responses."""

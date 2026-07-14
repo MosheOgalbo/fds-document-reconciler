@@ -71,6 +71,7 @@
     "versionLabel": "Version label",
     "versionPlaceholder": "e.g. v1",
     "ingesting": "Ingesting…",
+    "ingestingLarge": "Parsing tables and embedding — large PDFs can take 2–5 minutes…",
     "reIngest": "Re-ingest document",
     "ingestDocument": "Ingest document",
     "ingestionFailed": "Ingestion failed.",
@@ -79,8 +80,11 @@
     "fileSizeReplace": "{{size}} KB · click or drop to replace",
     "ingested": "{{name}} · {{version}} · ingested",
     "chunks": "chunks",
-    "parent": "parent",
-    "child": "child"
+    "totalChunks": "Total",
+    "parent": "Parent sections",
+    "child": "Child slices",
+    "tables": "Tables",
+    "tableRows": "Table rows"
   },
   "compare": {
     "title": "Comparison",

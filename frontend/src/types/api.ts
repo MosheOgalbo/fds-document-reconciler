@@ -25,12 +25,14 @@ export interface DiffItem {
   reason: string;
   sourceA: string;
   sourceB: string;
+  semantic_similarity?: number;
 }
 
 export interface MatchItem {
   textA: string;
   textB: string;
   source: string;
+  similarity_score?: number;
 }
 
 // Exact shape required by the challenge brief's Document Comparison Engine.
@@ -109,5 +111,6 @@ export interface HealthResponse {
   gemini_configured: boolean;
   openai_configured: boolean;
   pinecone_configured: boolean;
+  redis_configured: boolean;
   token_counting: "exact" | "approximate";
 }

@@ -143,6 +143,10 @@ def build_parent_child_chunks(
     """Returns a flat list of PARENT and CHILD DocumentChunk objects ready for embedding."""
     sections = _split_into_sections(pages)
     chunks: list[DocumentChunk] = []
+    chunk_index = 0
+    # Approximate character offset across the concatenated section stream so
+    # citations can point back near the original text position.
+    char_cursor = 0
 
     for section_path, text in sections:
         # A section might itself exceed the parent budget (e.g. a big table);
@@ -163,6 +167,7 @@ def build_parent_child_chunks(
 
         for parent_text in parent_texts:
             parent_id = str(uuid.uuid4())
+            parent_offset = char_cursor
             chunks.append(
                 DocumentChunk(
                     chunk_id=parent_id,
@@ -173,8 +178,11 @@ def build_parent_child_chunks(
                     section=section_path,
                     chunk_type=ChunkType.PARENT,
                     token_count=_approx_token_count(parent_text),
+                    chunk_index=chunk_index,
+                    char_offset=parent_offset,
                 )
             )
+            chunk_index += 1
 
             # Slide a window over the parent to build children with overlap.
             p_words = parent_text.split()
@@ -189,6 +197,9 @@ def build_parent_child_chunks(
                 if not child_words:
                     break
                 child_text = " ".join(child_words)
+                # Approximate offset within parent by cumulative word lengths.
+                prefix = " ".join(p_words[:i])
+                child_offset = parent_offset + (len(prefix) + (1 if prefix else 0))
                 chunks.append(
                     DocumentChunk(
                         chunk_id=str(uuid.uuid4()),
@@ -200,10 +211,15 @@ def build_parent_child_chunks(
                         chunk_type=ChunkType.CHILD,
                         parent_chunk_id=parent_id,
                         token_count=_approx_token_count(child_text),
+                        chunk_index=chunk_index,
+                        char_offset=child_offset,
                     )
                 )
+                chunk_index += 1
                 if i + window_words >= len(p_words):
                     break
                 i += step_words
+
+            char_cursor = parent_offset + len(parent_text) + 2
 
     return chunks

@@ -7,19 +7,19 @@ assignment specifies:
 
     {
       "missing": [{ "text", "source_file", "location" }],
-      "diff":    [{ "docA_text", "docB_text", "reason", "sourceA", "sourceB" }],
-      "match":   [{ "textA", "textB", "source" }]
+      "diff":    [{ "docA_text", "docB_text", "reason", "sourceA", "sourceB",
+                    "semantic_similarity"? }],
+      "match":   [{ "textA", "textB", "source", "similarity_score"? }]
     }
 
-Runs on the SMART model tier (not the fast/routing tier) — this is the step
-that actually has to read two documents' worth of retrieved context and
-reason carefully about semantic equivalence vs. meaningful change, so it's
-exactly where the more capable model earns its cost. The Router Agent
-already did the cheap classification work before any of this ran.
+Runs on the SMART model tier. After the LLM (or deterministic fallback)
+returns rows, we enrich paired texts with embedding cosine similarity so
+the UI can show how related each DIFF/MATCH pair is.
 """
 from __future__ import annotations
 
 from app.application.agents.state import GraphState
+from app.application.comparison.semantic_matcher import enrich_report_similarities
 from app.domain.entities.document import ComparisonReport, DiffItem, MatchItem, MissingItem
 from app.infrastructure.ai.llm_gateway import LLMGateway
 from app.infrastructure.security.prompt_injection import wrap_untrusted_content
@@ -113,6 +113,26 @@ Rules:
   relevant to a category was found, return an empty array for it."""
 
 
+def _row_diff(row: dict) -> DiffItem:
+    return DiffItem(
+        docA_text=row["docA_text"],
+        docB_text=row["docB_text"],
+        reason=row["reason"],
+        sourceA=row["sourceA"],
+        sourceB=row["sourceB"],
+        semantic_similarity=row.get("semantic_similarity"),
+    )
+
+
+def _row_match(row: dict) -> MatchItem:
+    return MatchItem(
+        textA=row["textA"],
+        textB=row["textB"],
+        source=row["source"],
+        similarity_score=row.get("similarity_score"),
+    )
+
+
 class ComparisonAgent:
     def __init__(self, llm: LLMGateway):
         self._llm = llm
@@ -136,25 +156,69 @@ class ComparisonAgent:
 
             report = ComparisonReport(
                 missing=[MissingItem(**row) for row in result["missing"]],
-                diff=[DiffItem(**row) for row in result["diff"]],
-                match=[MatchItem(**row) for row in result["match"]],
+                diff=[_row_diff(row) for row in result["diff"]],
+                match=[_row_match(row) for row in result["match"]],
             )
-            # If the model returned an overly-sparse comparison (common under rate-limit degradation),
-            # fall back to deterministic extraction so the UI shows something actionable.
-            if len(report.diff) == 0:
-                from app.application.fallback.deterministic import deterministic_compare
-
-                report = deterministic_compare(state.get("retrieved_chunks", []))
+            # Sparse under rate-limit degradation: fall back only when the model
+            # produced essentially nothing useful across all three categories.
+            total_rows = len(report.diff) + len(report.match) + len(report.missing)
+            if total_rows == 0:
+                report = await self._fallback_compare(state)
                 state.setdefault("agent_trace", []).append("comparison_agent:fallback=deterministic_sparse")
         except Exception:
-            # LLM-free fallback (e.g., rate limit / outage)
-            from app.application.fallback.deterministic import deterministic_compare
-
-            report = deterministic_compare(state.get("retrieved_chunks", []))
+            report = await self._fallback_compare(state)
             state.setdefault("agent_trace", []).append("comparison_agent:fallback=deterministic_error")
+
+        try:
+            report = await enrich_report_similarities(report, self._llm)
+            state.setdefault("agent_trace", []).append("comparison_agent:similarity=enriched")
+        except Exception:
+            state.setdefault("agent_trace", []).append("comparison_agent:similarity=skipped")
 
         state["comparison_report"] = report
         state.setdefault("agent_trace", []).append(
             f"comparison_agent:missing={len(report.missing)},diff={len(report.diff)},match={len(report.match)}"
         )
         return state
+
+    async def _fallback_compare(self, state: GraphState) -> ComparisonReport:
+        """Prefer embedding-based matching; merge with lexical Jaccard when sparse."""
+        from app.application.fallback.deterministic import deterministic_compare
+
+        retrieved = state.get("retrieved_chunks", [])
+        lexical = deterministic_compare(retrieved)
+        try:
+            from app.application.comparison.semantic_matcher import detect_diffs_semantic
+
+            by_doc: dict[str, list[dict]] = {}
+            for hit in retrieved:
+                meta = hit.get("metadata", {}) or {}
+                doc = str(meta.get("document") or "")
+                content = str(meta.get("content") or "")
+                if not doc or not content:
+                    continue
+                by_doc.setdefault(doc, []).append(
+                    {
+                        "text": content,
+                        "metadata": {
+                            "document": doc,
+                            "page": meta.get("page", 0),
+                            "section": meta.get("section", ""),
+                            "subsection_heading": meta.get("subsection_heading") or meta.get("heading") or "",
+                        },
+                    }
+                )
+            docs = list(by_doc.keys())
+            if len(docs) >= 2:
+                semantic = await detect_diffs_semantic(by_doc[docs[0]], by_doc[docs[1]], self._llm)
+                # Embedding match is better for MATCH; lexical Jaccard is often
+                # stronger at surfacing DIFF rows from short retrieved spans.
+                return ComparisonReport(
+                    missing=semantic.missing or lexical.missing,
+                    diff=semantic.diff or lexical.diff,
+                    match=semantic.match or lexical.match,
+                )
+        except Exception:
+            pass
+
+        return lexical

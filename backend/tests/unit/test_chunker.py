@@ -57,8 +57,21 @@ def test_metadata_contains_required_fields():
 
     for chunk in chunks:
         meta = chunk.to_metadata()
-        for field_name in ("document", "version", "page", "section", "chunk_id", "filename"):
+        for field_name in (
+            "document",
+            "version",
+            "page",
+            "section",
+            "chunk_id",
+            "filename",
+            "chunk_index",
+            "char_offset",
+            "section_heading",
+            "subsection_heading",
+        ):
             assert field_name in meta
+        assert isinstance(meta["chunk_index"], int)
+        assert isinstance(meta["char_offset"], int)
 
 
 def test_trailing_period_heading_format_is_recognized():

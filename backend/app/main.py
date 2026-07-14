@@ -84,6 +84,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     from app.core.tokens import using_exact_counting
+    from app.infrastructure.repositories.query_cache import is_redis_available
 
     return HealthResponse(
         status="ok",
@@ -92,5 +93,6 @@ async def health() -> HealthResponse:
         gemini_configured=is_gemini_configured(settings),
         openai_configured=is_openai_configured(settings),
         pinecone_configured=is_pinecone_configured(settings),
+        redis_configured=is_redis_available(),
         token_counting="exact" if using_exact_counting() else "approximate",
     )

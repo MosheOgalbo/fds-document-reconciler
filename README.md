@@ -583,7 +583,9 @@ results (chunk counts, zero missing embeddings, zero empty-content chunks).
 - **Conversation memory and rate limiting are in-process** (Python
   dict/deque), not shared across multiple backend replicas — fine for this
   take-home's single-instance scope; production would move both to Redis
-  behind the same interface.
+  behind the same interface. **Query/comparison response caching already
+  uses Redis** (`REDIS_URL`, redis service in `docker-compose.yml`) with
+  on-disk fallback when Redis is unreachable.
 - **No offline RAG evaluation harness** (recall@k, groundedness scoring
   against a labeled Q&A set) — the Validation Agent's LLM-judge substitutes
   for this at request time, but a proper eval suite would run this offline
@@ -597,7 +599,8 @@ results (chunk counts, zero missing embeddings, zero empty-content chunks).
 - A font-size/layout-aware heading classifier (e.g. using `pdfplumber`'s
   character-level bounding boxes) to eliminate the remaining table/heading
   false-positive case rather than just documenting it.
-- Redis-backed memory + rate limiting for multi-instance deployments.
+- Redis-backed conversation memory + rate limiting for multi-instance deployments
+  (query/comparison cache already uses Redis).
 - An offline RAG evaluation harness with a golden Q&A set for this exact
   Price Book document pair.
 - A dedicated cross-encoder reranker evaluation against the current

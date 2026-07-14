@@ -51,9 +51,16 @@ def parse_pdf(file_path: str | Path) -> list[RawPage]:
 
         if not pages:
             raise DocumentParsingError(f"No extractable pages in {file_path}")
+        # Reject fully empty extracts (image-only / encrypted / corrupt PDFs).
+        if all(not (p.text or "").strip() for p in pages):
+            raise DocumentParsingError(
+                f"PDF has no extractable text (image-only, encrypted, or corrupt): {file_path}"
+            )
         return pages
     except DocumentParsingError:
         raise
+    except FileNotFoundError as e:
+        raise DocumentParsingError(f"PDF file not found: {file_path}") from e
     except Exception as e:
         raise DocumentParsingError(f"Failed to parse PDF {file_path}: {e}") from e
 
@@ -103,7 +110,11 @@ def parse_docx(file_path: str | Path) -> list[RawPage]:
                 if md:
                     lines.append(md)
 
-        full_text = "\n".join(lines)
+        full_text = "\n".join(lines).strip()
+        if not full_text:
+            raise DocumentParsingError(
+                f"DOCX has no extractable text content: {file_path}"
+            )
 
         # DOCX has no native page-boundary concept in the object model, so
         # we treat the whole document as one logical page stream and rely
@@ -113,6 +124,8 @@ def parse_docx(file_path: str | Path) -> list[RawPage]:
         return [RawPage(page_number=1, text=full_text)]
     except DocumentParsingError:
         raise
+    except FileNotFoundError as e:
+        raise DocumentParsingError(f"DOCX file not found: {file_path}") from e
     except Exception as e:
         raise DocumentParsingError(f"Failed to parse DOCX {file_path}: {e}") from e
 

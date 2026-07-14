@@ -1,221 +1,151 @@
-"""
-Edge case test for comparison agent when both documents are identical.
-
-This test belongs in: backend/tests/integration/test_comparison_agent.py
-
-Add this test function to the existing test file.
-"""
+"""ComparisonAgent integration tests with fake LLM (no live API calls)."""
+from __future__ import annotations
 
 import pytest
-from backend.app.domain.entities.document import DocumentChunk, SectionPath, ChunkType
-from backend.app.application.agents.comparison_agent import ComparisonAgent
-from backend.app.infrastructure.ai.openai_client import OpenAIClient
+
+from app.application.agents.comparison_agent import ComparisonAgent
+from app.application.agents.state import GraphState
+
+
+class _FakeLLM:
+    def __init__(self, payload: dict | None = None, fail: bool = False):
+        self.payload = payload
+        self.fail = fail
+        self.embed_calls = 0
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        self.embed_calls += 1
+        # Same first sentence → high similarity; otherwise distinct.
+        out = []
+        for t in texts:
+            if "Phase A delivers" in t and "live field validation" not in t:
+                out.append([1.0, 0.0, 0.0])
+            elif "Phase A delivers" in t:
+                out.append([0.85, 0.4, 0.0])
+            elif "Phase B" in t:
+                out.append([0.0, 1.0, 0.0])
+            elif "Phase C" in t:
+                out.append([0.0, 0.0, 1.0])
+            else:
+                out.append([0.2, 0.2, 0.2])
+        return out
+
+    async def chat_json(self, *args, **kwargs):
+        if self.fail:
+            raise RuntimeError("LLM down")
+        return self.payload
+
+
+def _retrieved_identical() -> list[dict]:
+    text = "Phase A delivers real-time QA on PB Draft with live field validation."
+    text_b = "Phase B retains the current process structure."
+    return [
+        {
+            "chunk_id": "a1",
+            "metadata": {
+                "document": "FDS_PriceBook_V0.pdf",
+                "version": "v0",
+                "section": "Phase A",
+                "page": 4,
+                "content": text,
+            },
+        },
+        {
+            "chunk_id": "a2",
+            "metadata": {
+                "document": "FDS_PriceBook_V0.pdf",
+                "version": "v0",
+                "section": "Phase B",
+                "page": 5,
+                "content": text_b,
+            },
+        },
+        {
+            "chunk_id": "b1",
+            "metadata": {
+                "document": "FDS_PriceBook_V5.docx",
+                "version": "v5",
+                "section": "Phase A",
+                "page": 4,
+                "content": text,
+            },
+        },
+        {
+            "chunk_id": "b2",
+            "metadata": {
+                "document": "FDS_PriceBook_V5.docx",
+                "version": "v5",
+                "section": "Phase B",
+                "page": 5,
+                "content": text_b,
+            },
+        },
+    ]
 
 
 @pytest.mark.asyncio
-async def test_comparison_identical_documents():
-    """
-    Edge case: Both documents contain identical content.
-    
-    Expectation:
-    - comparison.match: populated with all sections/content
-    - comparison.diff: empty (no differences)
-    - comparison.missing: empty (no missing content)
-    - is_grounded: True (all claims are supported)
-    """
-    # Mock chunks representing identical content from both documents
-    identical_chunks_a = [
-        DocumentChunk(
-            chunk_id="chunk_1_v0",
-            document_id="doc_a",
-            document_name="FDS_PriceBook_V0.pdf",
-            version="v0",
-            content="Phase A delivers real-time QA on PB Draft with live field validation.",
-            section=SectionPath(heading_trail=("Phase A - Live QA on PB Draft",), page_number=4),
-            chunk_type=ChunkType.CHILD
-        ),
-        DocumentChunk(
-            chunk_id="chunk_2_v0",
-            document_id="doc_a",
-            document_name="FDS_PriceBook_V0.pdf",
-            version="v0",
-            content="Phase B retains the current process structure but replaces human coordination with automated execution.",
-            section=SectionPath(heading_trail=("Phase B - Automating the Existing Process",), page_number=5),
-            chunk_type=ChunkType.CHILD
-        ),
-    ]
-    
-    identical_chunks_b = [
-        DocumentChunk(
-            chunk_id="chunk_1_v5",
-            document_id="doc_b",
-            document_name="FDS_PriceBook_V5.docx",
-            version="v5",
-            content="Phase A delivers real-time QA on PB Draft with live field validation.",
-            section=SectionPath(heading_trail=("Phase A - Live QA on PB Draft",), page_number=4),
-            chunk_type=ChunkType.CHILD
-        ),
-        DocumentChunk(
-            chunk_id="chunk_2_v5",
-            document_id="doc_b",
-            document_name="FDS_PriceBook_V5.docx",
-            version="v5",
-            content="Phase B retains the current process structure but replaces human coordination with automated execution.",
-            section=SectionPath(heading_trail=("Phase B - Automating the Existing Process",), page_number=5),
-            chunk_type=ChunkType.CHILD
-        ),
-    ]
-    
-    # Initialize comparison agent with mock OpenAI client
-    openai_client = OpenAIClient()
-    comparison_agent = ComparisonAgent(openai_client=openai_client)
-    
-    # Run comparison
-    result = await comparison_agent.compare(
-        query="Compare the two versions",
-        chunks_doc_a=identical_chunks_a,
-        chunks_doc_b=identical_chunks_b
+async def test_comparison_identical_documents_via_llm():
+    llm = _FakeLLM(
+        {
+            "missing": [],
+            "diff": [],
+            "match": [
+                {
+                    "textA": "Phase A delivers real-time QA on PB Draft with live field validation.",
+                    "textB": "Phase A delivers real-time QA on PB Draft with live field validation.",
+                    "source": "FDS_PriceBook_V0.pdf / Page 4 + FDS_PriceBook_V5.docx / Page 4",
+                }
+            ],
+        }
     )
-    
-    # Assertions
-    assert result is not None, "Comparison result should not be None"
-    assert result.is_grounded is True, "Result should be grounded (claims supported by retrieved chunks)"
-    
-    # When docs are identical, all content should be in "match" category
-    assert len(result.match) > 0, "Should have matched content when documents are identical"
-    assert len(result.diff) == 0, "Should have no diffs when documents are identical"
-    assert len(result.missing) == 0, "Should have no missing content when documents are identical"
-    
-    # Verify citations for matched content
-    for match_item in result.match:
-        assert match_item.source, "Each match should include source citation"
-        assert "FDS_PriceBook_V0.pdf" in match_item.source or "FDS_PriceBook_V5.docx" in match_item.source
-        assert match_item.textA == match_item.textB, "Matched text should be identical"
+    agent = ComparisonAgent(llm)
+    state: GraphState = {
+        "user_query": "Compare the two versions",
+        "document_ids": ["doc_a", "doc_b"],
+        "expanded_context": "identical content context",
+        "retrieved_chunks": _retrieved_identical(),
+        "agent_trace": [],
+    }
+    result = await agent.run(state)
+    report = result["comparison_report"]
+    assert len(report.match) > 0
+    assert len(report.diff) == 0
+    assert len(report.missing) == 0
+    assert report.match[0].similarity_score is not None
+    assert llm.embed_calls > 0
+    assert any("similarity=enriched" in t for t in result["agent_trace"])
 
 
 @pytest.mark.asyncio
-async def test_comparison_empty_documents():
-    """
-    Edge case: One or both documents are empty.
-    
-    Expectation:
-    - All empty sections are reported in missing
-    - No crashes, graceful handling
-    """
-    empty_chunks = []
-    normal_chunks = [
-        DocumentChunk(
-            chunk_id="chunk_1",
-            document_id="doc_a",
-            document_name="FDS_PriceBook_V0.pdf",
-            version="v0",
-            content="Some content",
-            section=SectionPath(heading_trail=("Section 1",), page_number=1),
-            chunk_type=ChunkType.CHILD
-        )
-    ]
-    
-    openai_client = OpenAIClient()
-    comparison_agent = ComparisonAgent(openai_client=openai_client)
-    
-    # Compare empty vs. normal
-    result = await comparison_agent.compare(
-        query="Compare empty and normal documents",
-        chunks_doc_a=empty_chunks,
-        chunks_doc_b=normal_chunks
-    )
-    
-    # Should gracefully handle the empty case
-    assert result is not None
-    assert len(result.missing) > 0, "Should report missing content from empty doc"
-    # Empty doc has nothing, so nothing in match or diff
-    assert len(result.match) == 0
+async def test_comparison_falls_back_to_semantic_when_llm_fails():
+    agent = ComparisonAgent(_FakeLLM(fail=True))
+    state: GraphState = {
+        "user_query": "Compare",
+        "document_ids": ["doc_a", "doc_b"],
+        "expanded_context": "",
+        "retrieved_chunks": _retrieved_identical(),
+        "agent_trace": [],
+    }
+    result = await agent.run(state)
+    report = result["comparison_report"]
+    assert report is not None
+    assert any("fallback" in t for t in result["agent_trace"])
+    # Identical paired texts should produce at least one match via embeddings.
+    assert len(report.match) + len(report.diff) + len(report.missing) > 0
 
 
 @pytest.mark.asyncio
-async def test_comparison_partial_diff():
-    """
-    Edge case: Some content matches, some differs, some is missing.
-    Realistic scenario with mixed changes.
-    
-    Expectation:
-    - match: unchanged sections
-    - diff: changed sections  
-    - missing: added/removed sections
-    - All categories populated
-    """
-    chunks_v0 = [
-        DocumentChunk(
-            chunk_id="chunk_1_v0",
-            document_id="doc_a",
-            document_name="FDS_PriceBook_V0.pdf",
-            version="v0",
-            content="Phase A delivers real-time QA.",
-            section=SectionPath(heading_trail=("Phase A",), page_number=4),
-            chunk_type=ChunkType.CHILD
-        ),
-        DocumentChunk(
-            chunk_id="chunk_2_v0",
-            document_id="doc_a",
-            document_name="FDS_PriceBook_V0.pdf",
-            version="v0",
-            content="Phase B automates existing steps.",
-            section=SectionPath(heading_trail=("Phase B",), page_number=5),
-            chunk_type=ChunkType.CHILD
-        ),
-    ]
-    
-    chunks_v5 = [
-        DocumentChunk(
-            chunk_id="chunk_1_v5",
-            document_id="doc_b",
-            document_name="FDS_PriceBook_V5.docx",
-            version="v5",
-            content="Phase A delivers real-time QA with live field validation.",  # DIFF: added validation detail
-            section=SectionPath(heading_trail=("Phase A",), page_number=4),
-            chunk_type=ChunkType.CHILD
-        ),
-        DocumentChunk(
-            chunk_id="chunk_2_v5",
-            document_id="doc_b",
-            document_name="FDS_PriceBook_V5.docx",
-            version="v5",
-            content="Phase B automates existing steps.",  # MATCH: unchanged
-            section=SectionPath(heading_trail=("Phase B",), page_number=5),
-            chunk_type=ChunkType.CHILD
-        ),
-        DocumentChunk(
-            chunk_id="chunk_3_v5",
-            document_id="doc_b",
-            document_name="FDS_PriceBook_V5.docx",
-            version="v5",
-            content="Phase C transforms beyond Excel to modern platform.",  # MISSING: not in V0
-            section=SectionPath(heading_trail=("Phase C - Transformation",), page_number=6),
-            chunk_type=ChunkType.CHILD
-        ),
-    ]
-    
-    openai_client = OpenAIClient()
-    comparison_agent = ComparisonAgent(openai_client=openai_client)
-    
-    result = await comparison_agent.compare(
-        query="Compare versions",
-        chunks_doc_a=chunks_v0,
-        chunks_doc_b=chunks_v5
-    )
-    
-    # All three categories should be populated
-    assert len(result.match) > 0, "Should have matched sections"
-    assert len(result.diff) > 0, "Should have changed sections"
-    assert len(result.missing) > 0, "Should have missing sections"
-    
-    # Verify citations are present and valid
-    for diff_item in result.diff:
-        assert diff_item.sourceA, "Diff should cite source from doc A"
-        assert diff_item.sourceB, "Diff should cite source from doc B"
-        assert diff_item.reason, "Diff should explain what changed"
-
-
-if __name__ == "__main__":
-    # Run with: pytest backend/tests/integration/test_comparison_agent.py::test_comparison_identical_documents -v
-    pytest.main([__file__, "-v"])
+async def test_comparison_empty_retrieval_is_safe():
+    agent = ComparisonAgent(_FakeLLM(fail=True))
+    state: GraphState = {
+        "user_query": "Compare",
+        "document_ids": ["doc_a", "doc_b"],
+        "expanded_context": "",
+        "retrieved_chunks": [],
+        "agent_trace": [],
+    }
+    result = await agent.run(state)
+    report = result["comparison_report"]
+    assert report.missing == []
+    assert report.diff == []
+    assert report.match == []

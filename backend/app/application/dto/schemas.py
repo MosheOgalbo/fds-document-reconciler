@@ -42,4 +42,5 @@ class HealthResponse(BaseModel):
     gemini_configured: bool = False
     openai_configured: bool = False
     pinecone_configured: bool = False
+    redis_configured: bool = False
     token_counting: str  # "exact" (tiktoken) or "approximate" (fallback)

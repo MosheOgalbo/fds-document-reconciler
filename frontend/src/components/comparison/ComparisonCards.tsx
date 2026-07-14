@@ -20,6 +20,11 @@ export function DiffCard({ item }: { item: DiffItem }) {
     <div className="rounded-md border border-diff/20 bg-diff-soft/40 p-4">
       <div className="mb-2 flex items-center justify-between">
         <Badge variant="diff">Diff</Badge>
+        {typeof item.semantic_similarity === "number" && (
+          <span className="font-mono text-[11px] text-ink-faint">
+            similarity {item.semantic_similarity.toFixed(2)}
+          </span>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div>
@@ -44,7 +49,10 @@ export function MatchCard({ item }: { item: MatchItem }) {
     <div className="rounded-md border border-match/20 bg-match-soft/40 p-4">
       <div className="mb-2 flex items-center justify-between">
         <Badge variant="match">Match</Badge>
-        <span className="font-mono text-[11px] text-ink-faint">{item.source}</span>
+        <span className="font-mono text-[11px] text-ink-faint">
+          {item.source}
+          {typeof item.similarity_score === "number" ? ` · ${item.similarity_score.toFixed(2)}` : ""}
+        </span>
       </div>
       <p className="text-sm text-ink-soft">{item.textA}</p>
     </div>

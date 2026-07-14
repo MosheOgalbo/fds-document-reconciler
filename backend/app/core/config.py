@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     pinecone_cloud: str = Field(default="aws", alias="PINECONE_CLOUD")
     pinecone_region: str = Field(default="us-east-1", alias="PINECONE_REGION")
 
+    # --- Redis (query/comparison response cache) ---
+    redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
+    query_cache_ttl_seconds: int = Field(default=3600, alias="QUERY_CACHE_TTL_SECONDS")
+
     # --- API ---
     api_host: str = Field(default="0.0.0.0", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")

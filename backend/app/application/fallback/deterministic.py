@@ -103,6 +103,7 @@ def deterministic_compare(retrieved_chunks: list[dict]) -> ComparisonReport:
                     textA=(a0[0] if a0 else ca.content[:200]),
                     textB=(b0[0] if b0 else cb.content[:200]),
                     source=f"{ca.source_label} + {cb.source_label}",
+                    similarity_score=round(sim, 4),
                 )
             )
         elif sim >= 0.30:
@@ -115,6 +116,7 @@ def deterministic_compare(retrieved_chunks: list[dict]) -> ComparisonReport:
                     reason=f"Same section '{s}' but content changed (similarity={sim:.2f}, deterministic fallback).",
                     sourceA=ca.source_label,
                     sourceB=cb.source_label,
+                    semantic_similarity=round(sim, 4),
                 )
             )
 
@@ -156,6 +158,7 @@ def deterministic_compare(retrieved_chunks: list[dict]) -> ComparisonReport:
                     textA=s_a,
                     textB=best_s_b,
                     source=f"{c_a.source_label} + {best_c_b.source_label}",
+                    similarity_score=round(best_score, 4),
                 )
             )
         elif best_score >= DIFF_T and nums_a and nums_b and nums_a != nums_b:
@@ -167,6 +170,7 @@ def deterministic_compare(retrieved_chunks: list[dict]) -> ComparisonReport:
                     reason=f"Similar content but numeric/value change ({nums_a} → {nums_b}, similarity={best_score:.2f}, deterministic fallback).",
                     sourceA=c_a.source_label,
                     sourceB=best_c_b.source_label,
+                    semantic_similarity=round(best_score, 4),
                 )
             )
         elif best_score >= DIFF_T:
@@ -178,6 +182,7 @@ def deterministic_compare(retrieved_chunks: list[dict]) -> ComparisonReport:
                     reason=f"Similar topic but changed (similarity={best_score:.2f}, deterministic fallback).",
                     sourceA=c_a.source_label,
                     sourceB=best_c_b.source_label,
+                    semantic_similarity=round(best_score, 4),
                 )
             )
         else:
@@ -214,6 +219,7 @@ def deterministic_compare(retrieved_chunks: list[dict]) -> ComparisonReport:
                     reason=f"Best-effort diff between top retrieved sections (similarity={sim:.2f}, deterministic fallback).",
                     sourceA=ca.source_label,
                     sourceB=cb.source_label,
+                    semantic_similarity=round(sim, 4),
                 )
             )
 

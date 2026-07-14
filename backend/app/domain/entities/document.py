@@ -34,6 +34,7 @@ class DiffItem:
     reason: str
     sourceA: str
     sourceB: str
+    semantic_similarity: Optional[float] = None  # cosine similarity 0-1 when available
 
 
 @dataclass
@@ -42,18 +43,20 @@ class MatchItem:
     textA: str
     textB: str
     source: str  # e.g. "docA.pdf / Page 2 + docB.docx / Page 2"
+    similarity_score: Optional[float] = None  # cosine similarity 0-1 when available
 
 
 @dataclass
 class ComparisonReport:
     """
-    The full Document Comparison Engine output. Serializes to EXACTLY the
-    JSON structure required by the assignment:
+    The full Document Comparison Engine output. Serializes to the assignment
+    JSON structure, with optional numeric similarity fields when enrichment ran:
 
         {
           "missing": [{ "text", "source_file", "location" }],
-          "diff":    [{ "docA_text", "docB_text", "reason", "sourceA", "sourceB" }],
-          "match":   [{ "textA", "textB", "source" }]
+          "diff":    [{ "docA_text", "docB_text", "reason", "sourceA", "sourceB",
+                        "semantic_similarity"? }],
+          "match":   [{ "textA", "textB", "source", "similarity_score"? }]
         }
     """
     missing: list[MissingItem] = field(default_factory=list)
@@ -62,10 +65,15 @@ class ComparisonReport:
 
     def to_dict(self) -> dict:
         return {
-            "missing": [m.__dict__ for m in self.missing],
-            "diff": [d.__dict__ for d in self.diff],
-            "match": [m.__dict__ for m in self.match],
+            "missing": [m.__dict__.copy() for m in self.missing],
+            "diff": [_optional_fields(d.__dict__) for d in self.diff],
+            "match": [_optional_fields(m.__dict__) for m in self.match],
         }
+
+
+def _optional_fields(row: dict) -> dict:
+    """Omit None optional scores so the core brief schema stays clean when unset."""
+    return {k: v for k, v in row.items() if v is not None}
 
 
 @dataclass(frozen=True)
@@ -99,18 +107,27 @@ class DocumentChunk:
     parent_chunk_id: Optional[str] = None
     token_count: int = 0
     embedding: Optional[list[float]] = None
+    chunk_index: int = 0
+    char_offset: int = 0
 
     def to_metadata(self) -> dict:
         """Metadata payload stored alongside the vector in Pinecone."""
+        heading_trail = self.section.heading_trail
         return {
             "document": self.document_name,
             "document_id": self.document_id,
             "version": self.version,
             "page": self.section.page_number,
             "section": self.section.as_breadcrumb(),
-            "heading": self.section.heading_trail[-1] if self.section.heading_trail else "",
+            "heading": heading_trail[-1] if heading_trail else "",
+            "section_heading": heading_trail[0] if heading_trail else "",
+            "subsection_heading": heading_trail[-1] if len(heading_trail) > 1 else (
+                heading_trail[0] if heading_trail else ""
+            ),
             "chunk_id": self.chunk_id,
             "chunk_type": self.chunk_type.value,
+            "chunk_index": self.chunk_index,
+            "char_offset": self.char_offset,
             "parent_chunk_id": self.parent_chunk_id or "",
             "filename": self.document_name,
         }

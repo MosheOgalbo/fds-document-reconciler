@@ -100,12 +100,14 @@ class FakeLLM:
 
 class FakeStore:
     def query(self, query_embedding, top_k, document_ids=None, chunk_type="child"):
+        docs = document_ids or ["doc-a"]
         return [
             {
                 "chunk_id": "child-1",
                 "score": 0.92,
                 "metadata": {
                     "document": "FDS_PriceBook_V0.pdf",
+                    "document_id": docs[0],
                     "version": "v0",
                     "section": "NA Price Books",
                     "page": 6,
@@ -114,6 +116,9 @@ class FakeStore:
                 },
             }
         ]
+
+    def lexical_query(self, query, top_k, document_ids=None, chunk_type="child"):
+        return self.query([0.1], top_k, document_ids=document_ids, chunk_type=chunk_type)
 
     def fetch_parent(self, parent_chunk_id):
         assert parent_chunk_id == "parent-1"

@@ -39,6 +39,26 @@ def test_comparison_report_matches_exact_required_schema():
     ]
 
 
+def test_comparison_report_includes_optional_similarity_when_set():
+    report = ComparisonReport(
+        missing=[],
+        diff=[
+            DiffItem(
+                docA_text="A",
+                docB_text="B",
+                reason="changed",
+                sourceA="Page 1",
+                sourceB="Page 2",
+                semantic_similarity=0.55,
+            )
+        ],
+        match=[MatchItem(textA="x", textB="x", source="both", similarity_score=0.97)],
+    )
+    result = report.to_dict()
+    assert result["diff"][0]["semantic_similarity"] == 0.55
+    assert result["match"][0]["similarity_score"] == 0.97
+
+
 def test_comparison_report_empty_categories_are_empty_lists_not_missing_keys():
     report = ComparisonReport()
     result = report.to_dict()

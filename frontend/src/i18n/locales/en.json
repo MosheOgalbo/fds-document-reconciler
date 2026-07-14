@@ -1,0 +1,158 @@
+{
+  "app": {
+    "title": "Reconcile",
+    "subtitle": "FDS Document Reconciliation",
+    "metaTitle": "Reconcile — FDS Document Reconciliation",
+    "metaDescription": "Compare, query, and summarize Functional Design Spec versions with full citation traceability."
+  },
+  "nav": {
+    "documents": "Documents",
+    "freeChat": "Free Chat",
+    "compare": "Compare",
+    "ask": "Ask",
+    "executiveSummary": "Executive Summary"
+  },
+  "toolbar": {
+    "language": "Language",
+    "switchToHebrew": "עברית",
+    "switchToEnglish": "English"
+  },
+  "ledger": {
+    "title": "Ledger",
+    "notLoaded": "not loaded"
+  },
+  "common": {
+    "documentA": "Document A",
+    "documentB": "Document B",
+    "document": "Document {{label}}",
+    "required": "Required",
+    "reRun": "Re-run",
+    "goToDocuments": "Go to Documents",
+    "compare": "Compare",
+    "fullView": "Full view",
+    "why": "Why:",
+    "page": "page",
+    "similarity": "similarity",
+    "vs": "vs",
+    "docInScope_one": "{{count}} doc in scope",
+    "docInScope_other": "{{count}} docs in scope",
+    "sendMessage": "Send message"
+  },
+  "status": {
+    "match": "Match",
+    "diff": "Diff",
+    "missing": "Missing",
+    "ready": "Ready",
+    "itemsReconciled": "{{count}} items reconciled",
+    "critical": "critical",
+    "high": "high",
+    "medium": "medium",
+    "low": "low"
+  },
+  "banner": {
+    "backendUnreachable": "Can't reach the backend at <code>http://localhost:8000</code>. Run <code>docker compose up --build</code> from the project root.",
+    "apiKeyMissing": "Backend is running but <strong>GEMINI_API_KEY</strong> is missing. Get a free key at <a>Google AI Studio</a>, add it to <code>backend/.env</code>, and restart Docker."
+  },
+  "ingest": {
+    "title": "Load your documents",
+    "description": "Upload <strong>Document A</strong> (older version, e.g. PDF) and <strong>Document B</strong> (newer version, e.g. DOCX). Each file is parsed, chunked, embedded, and indexed for the agents. You must ingest both before Compare, Ask, or Executive Summary will work.",
+    "waitingForUpload": "Waiting for upload…",
+    "ingestSecondDoc": "Ingest the second document to unlock Compare, Ask, and Executive Summary.",
+    "bothReady": "Both documents are ready for the agents.",
+    "askQuestion": "Ask a question",
+    "executiveSummary": "Executive summary",
+    "clearLoaded": "Clear loaded documents",
+    "clickOrDrag": "Click or drag & drop",
+    "fileTypes": "PDF or DOCX from your computer",
+    "browseFiles": "Browse files",
+    "clearSelection": "Clear selection",
+    "documentName": "Document name",
+    "documentNamePlaceholder": "Filled from uploaded file",
+    "versionLabel": "Version label",
+    "versionPlaceholder": "e.g. v1",
+    "ingesting": "Ingesting…",
+    "reIngest": "Re-ingest document",
+    "ingestDocument": "Ingest document",
+    "ingestionFailed": "Ingestion failed.",
+    "chooseFileFirst": "Choose a file first",
+    "unsupportedFileType": "Unsupported file type. Use {{extensions}}.",
+    "fileSizeReplace": "{{size}} KB · click or drop to replace",
+    "ingested": "{{name}} · {{version}} · ingested",
+    "chunks": "chunks",
+    "parent": "parent",
+    "child": "child"
+  },
+  "compare": {
+    "title": "Comparison",
+    "docsRequired": "Load both Document A and Document B to run a comparison.",
+    "loading": "Reading both documents and reconciling section by section — this can take a moment.",
+    "failed": "Comparison failed.",
+    "query": "Compare the two documents in full: what matches, what changed, and what is missing.",
+    "emptyDiff": "No meaningfully changed sections were found.",
+    "emptyMissing": "Nothing is one-sided — every retrieved topic appears in both documents.",
+    "emptyMatch": "No semantically identical sections were found.",
+    "comparisonResult": "Comparison result",
+    "emptyPrompt": "Run a full reconciliation when you're ready — matches, changes, and missing sections are computed on demand.",
+    "runComparison": "Run comparison"
+  },
+  "chat": {
+    "title": "Ask",
+    "description": "Grounded Q&A — every answer is traced back to retrieved content, or the system tells you it doesn't know.",
+    "docsRequired": "Load at least one document to start asking questions.",
+    "scopeA": "Document A",
+    "scopeB": "Document B",
+    "scopeCross": "Cross-document",
+    "emptyState": "Ask a question about {{scope}}, or ask to compare them / summarize changes — those render as structured cards right here in the conversation. Answers are grounded strictly in retrieved content, with citations.",
+    "scopeBoth": "both documents",
+    "scopeSingle": "Document {{label}}",
+    "retrieving": "Retrieving and reasoning…",
+    "placeholderNoDoc": "Load a document for this scope first…",
+    "placeholderAsk": "Ask a question…",
+    "lowConfidence": "Low confidence — verify against the source",
+    "grounded": "Grounded in retrieved content",
+    "somethingWrong": "Something went wrong.",
+    "errorPrefix": "Error: {{message}}"
+  },
+  "freeChat": {
+    "title": "Free Chat",
+    "description": "One conversational surface for single-doc questions, cross-document analysis, structured comparison, and executive summaries — coordinated by the backend agent graph.",
+    "emptyNoDocs": "Upload Document A and Document B first. Free chat sends all loaded documents to <code>POST /api/v1/query</code>; the Router Agent classifies your intent and runs the matching workflow.",
+    "loadDocuments": "Load documents",
+    "panelTitle": "Free chat",
+    "panelSubtitle": "Ask anything — the Router Agent picks the workflow (chat, compare, or summary).",
+    "noDocsLoaded": "No documents loaded",
+    "intro": "Natural-language Q&A over your ingested FDS documents. The backend LangGraph pipeline routes each question to the right agents — retrieval, comparison, summary, validation, and citations — with conversation memory across turns.",
+    "processing": "Router → Retrieval → Agents…",
+    "placeholderNoDoc": "Load documents on the Documents page first…",
+    "placeholderAsk": "Ask freely about your documents…",
+    "starters": {
+      "phaseA": "What is Phase A in the newer document?",
+      "naUplift": "What changed in the NA uplift rules between versions?",
+      "compare": "Compare both documents — what matches, changed, or is missing?",
+      "top10": "Give me the top 10 most important changes as an executive summary.",
+      "threePhase": "Explain the three-phase transformation strategy in plain language."
+    }
+  },
+  "summary": {
+    "title": "Executive Summary",
+    "subtitle": "Ranked by semantic importance, not document order.",
+    "docsRequired": "Load both Document A and Document B to generate an executive summary.",
+    "loading": "Ranking changes by business, architecture, and workflow impact…",
+    "failed": "Summary generation failed.",
+    "query": "Give me the executive summary of the top most important changes between versions.",
+    "topChanges": "Top {{count}} Changes — Ranked by Business Importance",
+    "topChangesInline": "Top {{count}} changes",
+    "businessImpact": "Business Impact",
+    "architectureImpact": "Architecture Impact",
+    "workflowImpact": "Workflow Impact",
+    "whyRanks": "Why it ranks here:",
+    "emptyPrompt": "Generate the executive summary when you're ready — top changes ranked by business importance.",
+    "runSummary": "Generate summary"
+  },
+  "intent": {
+    "single_doc_chat": "Single document",
+    "cross_doc_chat": "Cross-document",
+    "compare_documents": "Comparison",
+    "executive_summary": "Executive summary"
+  }
+}

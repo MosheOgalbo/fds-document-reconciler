@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation, Trans } from "react-i18next";
 import { AlertTriangle, WifiOff } from "lucide-react";
 import { checkHealth } from "@/lib/api";
 
 export function ConfigurationBanner() {
+  const { t } = useTranslation();
   const { data, isError } = useQuery({
     queryKey: ["health"],
     queryFn: checkHealth,
@@ -15,8 +17,10 @@ export function ConfigurationBanner() {
       <div className="flex items-center gap-2 border-b border-missing/30 bg-missing-soft px-6 py-2.5 text-sm text-missing">
         <WifiOff size={15} className="shrink-0" />
         <span>
-          Can't reach the backend at <code className="font-mono">http://localhost:8000</code>. Run{" "}
-          <code className="font-mono">docker compose up --build</code> from the project root.
+          <Trans
+            i18nKey="banner.backendUnreachable"
+            components={{ code: <code className="font-mono" /> }}
+          />
         </span>
       </div>
     );
@@ -29,11 +33,21 @@ export function ConfigurationBanner() {
       <div className="flex items-center gap-2 border-b border-diff/30 bg-diff-soft px-6 py-2.5 text-sm text-diff">
         <AlertTriangle size={15} className="shrink-0" />
         <span>
-          Backend is running but <strong>GEMINI_API_KEY</strong> is missing. Get a free key at{" "}
-          <a href="https://aistudio.google.com/apikey" className="underline" target="_blank" rel="noreferrer">
-            Google AI Studio
-          </a>
-          , add it to <code className="font-mono">backend/.env</code>, and restart Docker.
+          <Trans
+            i18nKey="banner.apiKeyMissing"
+            components={{
+              strong: <strong />,
+              code: <code className="font-mono" />,
+              a: (
+                <a
+                  href="https://aistudio.google.com/apikey"
+                  className="underline"
+                  target="_blank"
+                  rel="noreferrer"
+                />
+              ),
+            }}
+          />
         </span>
       </div>
     );

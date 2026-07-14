@@ -67,13 +67,16 @@ def _sentences(chunk: _Chunk, limit: int = 25) -> list[str]:
     return parts
 
 
-def deterministic_compare(retrieved_chunks: list[dict]) -> ComparisonReport:
+def deterministic_compare(
+    retrieved_chunks: list[dict],
+    document_ids: list[str] | None = None,
+) -> ComparisonReport:
     """
     LLM-free fallback: approximate MATCH/DIFF/MISSING from retrieved chunk text.
     Still produces citations via the chunk metadata.
     """
     by_doc = _chunks_by_doc(retrieved_chunks)
-    docs = list(by_doc.keys())
+    docs = _ordered_doc_keys(retrieved_chunks, by_doc, document_ids)
     if len(docs) < 2:
         return ComparisonReport(missing=[], diff=[], match=[])
 
@@ -95,7 +98,7 @@ def deterministic_compare(retrieved_chunks: list[dict]) -> ComparisonReport:
         ta = _token_set(ca.content[:4000])
         tb = _token_set(cb.content[:4000])
         sim = _jaccard(ta, tb)
-        if sim >= 0.88:
+        if sim >= 0.85:
             a0 = _sentences(ca, limit=1)
             b0 = _sentences(cb, limit=1)
             match.append(
@@ -106,7 +109,7 @@ def deterministic_compare(retrieved_chunks: list[dict]) -> ComparisonReport:
                     similarity_score=round(sim, 4),
                 )
             )
-        elif sim >= 0.30:
+        elif sim >= 0.35:
             a0 = _sentences(ca, limit=1)
             b0 = _sentences(cb, limit=1)
             diff.append(
@@ -127,8 +130,8 @@ def deterministic_compare(retrieved_chunks: list[dict]) -> ComparisonReport:
     b_items = [(_token_set(s), s, c) for s, c in sent_b]
     used_b: set[int] = set()
 
-    MATCH_T = 0.90
-    DIFF_T = 0.25
+    MATCH_T = 0.82
+    DIFF_T = 0.30
 
     for s_a, c_a in sent_a[:160]:
         ta = _token_set(s_a)
@@ -151,7 +154,7 @@ def deterministic_compare(retrieved_chunks: list[dict]) -> ComparisonReport:
         nums_a = _numbers(s_a)
         nums_b = _numbers(best_s_b)
 
-        if best_score >= MATCH_T and _norm(s_a) == _norm(best_s_b):
+        if best_score >= MATCH_T or (best_score >= 0.75 and _norm(s_a) == _norm(best_s_b)):
             used_b.add(best_idx)
             match.append(
                 MatchItem(
@@ -224,10 +227,36 @@ def deterministic_compare(retrieved_chunks: list[dict]) -> ComparisonReport:
             )
 
     return ComparisonReport(
-        missing=missing[:12],
-        diff=diff[:12],
-        match=match[:12],
+        missing=missing[:24],
+        diff=diff[:24],
+        match=match[:24],
     )
+
+
+def _ordered_doc_keys(
+    retrieved_chunks: list[dict],
+    by_doc: dict[str, list[_Chunk]],
+    document_ids: list[str] | None,
+) -> list[str]:
+    keys = list(by_doc.keys())
+    if len(keys) < 2 or not document_ids or len(document_ids) < 2:
+        return keys
+
+    id_to_name: dict[str, str] = {}
+    for hit in retrieved_chunks:
+        meta = hit.get("metadata", {}) or {}
+        doc_id = str(meta.get("document_id") or "")
+        doc_name = str(meta.get("document") or "")
+        if doc_id and doc_name:
+            id_to_name[doc_id] = doc_name
+
+    ordered: list[str] = []
+    for doc_id in document_ids[:2]:
+        name = id_to_name.get(doc_id)
+        if name and name in by_doc and name not in ordered:
+            ordered.append(name)
+
+    return ordered if len(ordered) >= 2 else keys
 
 
 def deterministic_answer(question: str, retrieved_chunks: list[dict]) -> tuple[str, list[Citation]]:

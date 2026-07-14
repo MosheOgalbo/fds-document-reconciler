@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     parent_chunk_size_tokens: int = Field(default=1600, alias="PARENT_CHUNK_SIZE_TOKENS")
     retrieval_top_k: int = Field(default=20, alias="RETRIEVAL_TOP_K")
     rerank_top_n: int = Field(default=6, alias="RERANK_TOP_N")
+    compare_rerank_top_n: int = Field(default=16, alias="COMPARE_RERANK_TOP_N")
     grounding_confidence_threshold: float = Field(default=0.55, alias="GROUNDING_CONFIDENCE_THRESHOLD")
 
     # --- Security / resilience ---

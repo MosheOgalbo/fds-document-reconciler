@@ -7,6 +7,10 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  html[dir="rtl"] body {
+    letter-spacing: 0.01em;
+  }
+
   body {
     @apply bg-paper text-ink font-sans text-[15px] leading-relaxed;
   }

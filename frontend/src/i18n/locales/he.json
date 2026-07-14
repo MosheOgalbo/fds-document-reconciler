@@ -1,0 +1,158 @@
+{
+  "app": {
+    "title": "Reconcile",
+    "subtitle": "התאמת מסמכי FDS",
+    "metaTitle": "Reconcile — התאמת מסמכי FDS",
+    "metaDescription": "השוואה, שאילתות וסיכום גרסאות של מפרטי עיצוב פונקציונלי עם מעקב ציטוטים מלא."
+  },
+  "nav": {
+    "documents": "מסמכים",
+    "freeChat": "צ'אט חופשי",
+    "compare": "השוואה",
+    "ask": "שאל",
+    "executiveSummary": "סיכום מנהלים"
+  },
+  "toolbar": {
+    "language": "שפה",
+    "switchToHebrew": "עברית",
+    "switchToEnglish": "English"
+  },
+  "ledger": {
+    "title": "רישום",
+    "notLoaded": "לא נטען"
+  },
+  "common": {
+    "documentA": "מסמך A",
+    "documentB": "מסמך B",
+    "document": "מסמך {{label}}",
+    "required": "שדה חובה",
+    "reRun": "הרץ מחדש",
+    "goToDocuments": "עבור למסמכים",
+    "compare": "השווה",
+    "fullView": "תצוגה מלאה",
+    "why": "למה:",
+    "page": "עמוד",
+    "similarity": "דמיון",
+    "vs": "לעומת",
+    "docInScope_one": "מסמך {{count}} בטווח",
+    "docInScope_other": "{{count}} מסמכים בטווח",
+    "sendMessage": "שלח הודעה"
+  },
+  "status": {
+    "match": "התאמה",
+    "diff": "שינוי",
+    "missing": "חסר",
+    "ready": "מוכן",
+    "itemsReconciled": "{{count}} פריטים הותאמו",
+    "critical": "קריטי",
+    "high": "גבוה",
+    "medium": "בינוני",
+    "low": "נמוך"
+  },
+  "banner": {
+    "backendUnreachable": "לא ניתן להגיע לשרת ב-<code>http://localhost:8000</code>. הרץ <code>docker compose up --build</code> מתיקיית הפרויקט.",
+    "apiKeyMissing": "השרת פועל אך חסר <strong>GEMINI_API_KEY</strong>. קבל מפתח חינמי ב-<a>Google AI Studio</a>, הוסף ל-<code>backend/.env</code>, והפעל מחדש את Docker."
+  },
+  "ingest": {
+    "title": "טען את המסמכים שלך",
+    "description": "העלה <strong>מסמך A</strong> (גרסה ישנה, למשל PDF) ו-<strong>מסמך B</strong> (גרסה חדשה, למשל DOCX). כל קובץ מנותח, מחולק לקטעים, מוטמע ומאונדקס עבור הסוכנים. יש לטעון את שניהם לפני שהשוואה, שאילתות או סיכום מנהלים יעבדו.",
+    "waitingForUpload": "ממתין להעלאה…",
+    "ingestSecondDoc": "טען את המסמך השני כדי לפתוח השוואה, שאילתות וסיכום מנהלים.",
+    "bothReady": "שני המסמכים מוכנים לסוכנים.",
+    "askQuestion": "שאל שאלה",
+    "executiveSummary": "סיכום מנהלים",
+    "clearLoaded": "נקה מסמכים שנטענו",
+    "clickOrDrag": "לחץ או גרור ושחרר",
+    "fileTypes": "PDF או DOCX מהמחשב שלך",
+    "browseFiles": "עיין בקבצים",
+    "clearSelection": "נקה בחירה",
+    "documentName": "שם המסמך",
+    "documentNamePlaceholder": "מתמלא מהקובץ שהועלה",
+    "versionLabel": "תווית גרסה",
+    "versionPlaceholder": "למשל v1",
+    "ingesting": "טוען…",
+    "reIngest": "טען מחדש",
+    "ingestDocument": "טען מסמך",
+    "ingestionFailed": "הטעינה נכשלה.",
+    "chooseFileFirst": "בחר קובץ תחילה",
+    "unsupportedFileType": "סוג קובץ לא נתמך. השתמש ב-{{extensions}}.",
+    "fileSizeReplace": "{{size}} KB · לחץ או גרור להחלפה",
+    "ingested": "{{name}} · {{version}} · נטען",
+    "chunks": "קטעים",
+    "parent": "הורה",
+    "child": "ילד"
+  },
+  "compare": {
+    "title": "השוואה",
+    "docsRequired": "טען את מסמך A ומסמך B כדי להריץ השוואה.",
+    "loading": "קורא את שני המסמכים ומתאים סעיף אחר סעיף — זה עלול לקחת רגע.",
+    "failed": "ההשוואה נכשלה.",
+    "query": "השווה את שני המסמכים במלואם: מה תואם, מה השתנה ומה חסר.",
+    "emptyDiff": "לא נמצאו סעיפים שהשתנו באופן משמעותי.",
+    "emptyMissing": "אין חד-צדדיות — כל נושא שנשלף מופיע בשני המסמכים.",
+    "emptyMatch": "לא נמצאו סעיפים זהים סמנטית.",
+    "comparisonResult": "תוצאת השוואה",
+    "emptyPrompt": "הרץ השוואה מלאה כשאתה מוכן — התאמות, שינויים וסעיפים חסרים מחושבים לפי דרישה.",
+    "runComparison": "הרץ השוואה"
+  },
+  "chat": {
+    "title": "שאל",
+    "description": "שאלות ותשובות מבוססות מקור — כל תשובה מקושרת לתוכן שנשלף, או שהמערכת מודיעה שאינה יודעת.",
+    "docsRequired": "טען לפחות מסמך אחד כדי להתחיל לשאול שאלות.",
+    "scopeA": "מסמך A",
+    "scopeB": "מסמך B",
+    "scopeCross": "בין-מסמכי",
+    "emptyState": "שאל שאלה על {{scope}}, או בקש להשוות / לסכם שינויים — אלה יוצגו ככרטיסים מובנים כאן בשיחה. התשובות מבוססות אך ורק על תוכן שנשלף, עם ציטוטים.",
+    "scopeBoth": "שני המסמכים",
+    "scopeSingle": "מסמך {{label}}",
+    "retrieving": "שולף ומנתח…",
+    "placeholderNoDoc": "טען מסמך לטווח זה תחילה…",
+    "placeholderAsk": "שאל שאלה…",
+    "lowConfidence": "רמת ביטחון נמוכה — אמת מול המקור",
+    "grounded": "מבוסס על תוכן שנשלף",
+    "somethingWrong": "משהו השתבש.",
+    "errorPrefix": "שגיאה: {{message}}"
+  },
+  "freeChat": {
+    "title": "צ'אט חופשי",
+    "description": "ממשק שיחה אחד לשאלות על מסמך בודד, ניתוח בין-מסמכי, השוואה מובנית וסיכומי מנהלים — מתואם על ידי גרף הסוכנים בשרת.",
+    "emptyNoDocs": "העלה תחילה מסמך A ומסמך B. הצ'אט החופשי שולח את כל המסמכים הנטענים ל-<code>POST /api/v1/query</code>; סוכן הניתוב מסווג את הכוונה ומריץ את זרימת העבודה המתאימה.",
+    "loadDocuments": "טען מסמכים",
+    "panelTitle": "צ'אט חופשי",
+    "panelSubtitle": "שאל כל דבר — סוכן הניתוב בוחר את זרימת העבודה (צ'אט, השוואה או סיכום).",
+    "noDocsLoaded": "לא נטענו מסמכים",
+    "intro": "שאלות ותשובות בשפה טבעית על מסמכי FDS שנטענו. צינור LangGraph בשרת מנתב כל שאלה לסוכנים הנכונים — שליפה, השוואה, סיכום, אימות וציטוטים — עם זיכרון שיחה בין תורות.",
+    "processing": "ניתוב → שליפה → סוכנים…",
+    "placeholderNoDoc": "טען מסמכים בעמוד המסמכים תחילה…",
+    "placeholderAsk": "שאל בחופשיות על המסמכים שלך…",
+    "starters": {
+      "phaseA": "מהי Phase A במסמך החדש?",
+      "naUplift": "מה השתנה בכללי NA uplift בין הגרסאות?",
+      "compare": "השווה את שני המסמכים — מה תואם, השתנה או חסר?",
+      "top10": "תן לי את 10 השינויים החשובים ביותר כסיכום מנהלים.",
+      "threePhase": "הסבר את אסטרטגיית הש transformation בשלושה שלבים בשפה פשוטה."
+    }
+  },
+  "summary": {
+    "title": "סיכום מנהלים",
+    "subtitle": "מדורג לפי חשיבות סמנטית, לא לפי סדר המסמך.",
+    "docsRequired": "טען את מסמך A ומסמך B כדי ליצור סיכום מנהלים.",
+    "loading": "מדרג שינויים לפי השפעה עסקית, ארכיטקטונית ותהליכית…",
+    "failed": "יצירת הסיכום נכשלה.",
+    "query": "תן לי את סיכום המנהלים של השינויים החשובים ביותר בין הגרסאות.",
+    "topChanges": "{{count}} השינויים המובילים — מדורגים לפי חשיבות עסקית",
+    "topChangesInline": "{{count}} שינויים מובילים",
+    "businessImpact": "השפעה עסקית",
+    "architectureImpact": "השפעה ארכיטקטונית",
+    "workflowImpact": "השפעה על תהליכים",
+    "whyRanks": "למה מדורג כאן:",
+    "emptyPrompt": "צור את סיכום המנהלים כשאתה מוכן — השינויים המובילים מדורגים לפי חשיבות עסקית.",
+    "runSummary": "צור סיכום"
+  },
+  "intent": {
+    "single_doc_chat": "מסמך בודד",
+    "cross_doc_chat": "בין-מסמכי",
+    "compare_documents": "השוואה",
+    "executive_summary": "סיכום מנהלים"
+  }
+}

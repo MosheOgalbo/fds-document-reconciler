@@ -1,11 +1,14 @@
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import type { DiffItem, MatchItem, MissingItem } from "@/types/api";
 
 export function MissingCard({ item }: { item: MissingItem }) {
+  const { t } = useTranslation();
+
   return (
     <div className="rounded-md border border-missing/20 bg-missing-soft/40 p-4">
       <div className="mb-2 flex items-center justify-between">
-        <Badge variant="missing">Missing</Badge>
+        <Badge variant="missing">{t("status.missing")}</Badge>
         <span className="font-mono text-[11px] text-ink-faint">
           {item.source_file} · {item.location}
         </span>
@@ -16,13 +19,15 @@ export function MissingCard({ item }: { item: MissingItem }) {
 }
 
 export function DiffCard({ item }: { item: DiffItem }) {
+  const { t } = useTranslation();
+
   return (
     <div className="rounded-md border border-diff/20 bg-diff-soft/40 p-4">
       <div className="mb-2 flex items-center justify-between">
-        <Badge variant="diff">Diff</Badge>
+        <Badge variant="diff">{t("status.diff")}</Badge>
         {typeof item.semantic_similarity === "number" && (
           <span className="font-mono text-[11px] text-ink-faint">
-            similarity {item.semantic_similarity.toFixed(2)}
+            {t("common.similarity")} {item.semantic_similarity.toFixed(2)}
           </span>
         )}
       </div>
@@ -37,7 +42,7 @@ export function DiffCard({ item }: { item: DiffItem }) {
         </div>
       </div>
       <p className="mt-3 border-t border-diff/20 pt-2 text-xs text-ink-soft">
-        <span className="font-medium text-diff">Why: </span>
+        <span className="font-medium text-diff">{t("common.why")} </span>
         {item.reason}
       </p>
     </div>
@@ -45,10 +50,12 @@ export function DiffCard({ item }: { item: DiffItem }) {
 }
 
 export function MatchCard({ item }: { item: MatchItem }) {
+  const { t } = useTranslation();
+
   return (
     <div className="rounded-md border border-match/20 bg-match-soft/40 p-4">
       <div className="mb-2 flex items-center justify-between">
-        <Badge variant="match">Match</Badge>
+        <Badge variant="match">{t("status.match")}</Badge>
         <span className="font-mono text-[11px] text-ink-faint">
           {item.source}
           {typeof item.similarity_score === "number" ? ` · ${item.similarity_score.toFixed(2)}` : ""}

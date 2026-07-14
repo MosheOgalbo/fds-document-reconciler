@@ -1,15 +1,17 @@
+import { useTranslation } from "react-i18next";
 import type { ComparisonReport } from "@/types/api";
 
 export function ReconciliationBar({ report }: { report: ComparisonReport }) {
+  const { t } = useTranslation();
   const matchCount = report.match.length;
   const diffCount = report.diff.length;
   const missingCount = report.missing.length;
   const total = matchCount + diffCount + missingCount || 1;
 
   const segments = [
-    { label: "Match", count: matchCount, color: "bg-match" },
-    { label: "Diff", count: diffCount, color: "bg-diff" },
-    { label: "Missing", count: missingCount, color: "bg-missing" },
+    { key: "match" as const, count: matchCount, color: "bg-match" },
+    { key: "diff" as const, count: diffCount, color: "bg-diff" },
+    { key: "missing" as const, count: missingCount, color: "bg-missing" },
   ];
 
   return (
@@ -19,22 +21,22 @@ export function ReconciliationBar({ report }: { report: ComparisonReport }) {
           (s) =>
             s.count > 0 && (
               <div
-                key={s.label}
+                key={s.key}
                 className={s.color}
                 style={{ width: `${(s.count / total) * 100}%` }}
-                title={`${s.label}: ${s.count}`}
+                title={`${t(`status.${s.key}`)}: ${s.count}`}
               />
             ),
         )}
       </div>
       <div className="mt-3 flex items-center gap-6 font-mono text-xs text-ink-soft">
         {segments.map((s) => (
-          <div key={s.label} className="flex items-center gap-1.5">
+          <div key={s.key} className="flex items-center gap-1.5">
             <span className={`h-2 w-2 rounded-full ${s.color}`} />
-            {s.label} <span className="text-ink">{s.count}</span>
+            {t(`status.${s.key}`)} <span className="text-ink">{s.count}</span>
           </div>
         ))}
-        <div className="ml-auto text-ink-faint">{total} items reconciled</div>
+        <div className="ms-auto text-ink-faint">{t("status.itemsReconciled", { count: total })}</div>
       </div>
     </div>
   );

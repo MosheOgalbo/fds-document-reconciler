@@ -22,6 +22,11 @@ from app.infrastructure.vectordb.pinecone_client import PineconeVectorStore
 
 logger = logging.getLogger(__name__)
 
+_COMPARE_FOCUS_QUERY = (
+    "Compare all sections, rules, requirements, phases, pricing, workflows, "
+    "and functional specifications between both document versions."
+)
+
 
 class RetrievalAgent:
     def __init__(self, llm: LLMGateway, vector_store: PineconeVectorStore):
@@ -32,17 +37,21 @@ class RetrievalAgent:
     async def run(self, state: GraphState) -> GraphState:
         query = state["user_query"]
         document_ids = state.get("document_ids") or None
+        intent = state.get("intent", "")
+        is_compare = intent in ("compare_documents", "executive_summary")
 
         try:
             [query_embedding] = await self._llm.embed([query])
-            hits = self._store.query(
-                query_embedding=query_embedding,
-                top_k=self._settings.retrieval_top_k,
-                document_ids=document_ids,
-                chunk_type="child",
-            )
+            if is_compare and document_ids and len(document_ids) >= 2:
+                hits = self._compare_balanced_retrieval(query, query_embedding, document_ids)
+            else:
+                hits = self._store.query(
+                    query_embedding=query_embedding,
+                    top_k=self._settings.retrieval_top_k,
+                    document_ids=document_ids,
+                    chunk_type="child",
+                )
         except Exception as e:
-            # LLM-free fallback: scan the local mock index and rank by lexical overlap.
             logger.warning("Embedding failed; falling back to lexical retrieval: %s", e)
             hits = self._store.lexical_query(
                 query=query,
@@ -51,8 +60,7 @@ class RetrievalAgent:
                 chunk_type="child",
             )
 
-        # Ensure cross-doc workflows have evidence from BOTH docs when possible.
-        if document_ids and len(document_ids) == 2:
+        if not is_compare and document_ids and len(document_ids) == 2:
             present = {h.get("metadata", {}).get("document_id") for h in hits}
             missing_docs = [d for d in document_ids if d not in present]
             for missing_doc_id in missing_docs:
@@ -64,10 +72,13 @@ class RetrievalAgent:
                 )
                 hits.extend(extra)
 
-        reranked = self._rerank(query, hits)[: self._settings.rerank_top_n]
+        rerank_limit = (
+            self._settings.compare_rerank_top_n
+            if is_compare
+            else self._settings.rerank_top_n
+        )
+        reranked = self._rerank(query, hits)[:rerank_limit]
 
-        # Expand each surviving child hit to its parent chunk for full context,
-        # deduping by parent_chunk_id so we don't repeat the same parent twice.
         seen_parents: set[str] = set()
         expanded_blocks: list[str] = []
         final_hits: list[dict] = []
@@ -97,46 +108,95 @@ class RetrievalAgent:
 
         state["retrieved_chunks"] = final_hits
         state["expanded_context"] = expanded_context
-        state.setdefault("agent_trace", []).append(f"retrieval_agent:hits={len(final_hits)}")
+        state.setdefault("agent_trace", []).append(
+            f"retrieval_agent:hits={len(final_hits)}{',mode=compare' if is_compare else ''}"
+        )
         return state
 
+    def _compare_balanced_retrieval(
+        self,
+        query: str,
+        query_embedding: list[float],
+        document_ids: list[str],
+    ) -> list[dict]:
+        """Retrieve a balanced slice from each document for fair comparison."""
+        focus_query = query.strip() or _COMPARE_FOCUS_QUERY
+        per_doc_k = max(self._settings.retrieval_top_k // 2, 12)
+        hits: list[dict] = []
+        seen_ids: set[str] = set()
+
+        for doc_id in document_ids[:2]:
+            doc_hits = self._store.query(
+                query_embedding=query_embedding,
+                top_k=per_doc_k,
+                document_ids=[doc_id],
+                chunk_type="child",
+            )
+            for hit in doc_hits:
+                cid = str(hit.get("chunk_id") or "")
+                if cid and cid not in seen_ids:
+                    seen_ids.add(cid)
+                    hits.append(hit)
+
+            lexical_hits = self._store.lexical_query(
+                query=focus_query,
+                top_k=8,
+                document_ids=[doc_id],
+                chunk_type="child",
+            )
+            for hit in lexical_hits:
+                cid = str(hit.get("chunk_id") or "")
+                if cid and cid not in seen_ids:
+                    seen_ids.add(cid)
+                    hits.append(hit)
+
+        return self._balance_by_document(hits, document_ids[:2], self._settings.compare_rerank_top_n)
+
+    def _balance_by_document(
+        self,
+        hits: list[dict],
+        document_ids: list[str],
+        limit: int,
+    ) -> list[dict]:
+        by_doc: dict[str, list[dict]] = {doc_id: [] for doc_id in document_ids}
+        for hit in hits:
+            doc_id = str(hit.get("metadata", {}).get("document_id") or "")
+            if doc_id in by_doc:
+                by_doc[doc_id].append(hit)
+
+        per_doc_quota = max(limit // max(len(document_ids), 1), 4)
+        balanced: list[dict] = []
+        seen: set[str] = set()
+
+        for doc_id in document_ids:
+            for hit in by_doc.get(doc_id, [])[:per_doc_quota]:
+                cid = str(hit.get("chunk_id") or "")
+                if cid and cid not in seen:
+                    seen.add(cid)
+                    balanced.append(hit)
+
+        for hit in hits:
+            if len(balanced) >= limit:
+                break
+            cid = str(hit.get("chunk_id") or "")
+            if cid and cid not in seen:
+                seen.add(cid)
+                balanced.append(hit)
+
+        return balanced[:limit]
+
     def _rerank(self, query: str, hits: list[dict]) -> list[dict]:
-        """
-        Rerank retrieved chunks by vector similarity + lexical overlap boost.
-        
-        ===== CURRENT IMPLEMENTATION =====
-        This method uses a hybrid ranking strategy:
-        1. Primary: Dense vector similarity (from Pinecone embedding)
-        2. Secondary: Lexical overlap boost (BM25-style term frequency)
-        
-        The vector similarity score (0.0–1.0) is the main ranker. We then apply a 
-        lexical-overlap boost on top, which increases the score for chunks that 
-        share exact terms with the query.
-        
-        ===== FUTURE IMPROVEMENT: CROSS-ENCODER RERANKER =====
-        For production document reconciliation, replacing this method with a 
-        dedicated cross-encoder reranker would improve retrieval quality by 3–5% 
-        (recall@5 benchmark on typical reconciliation queries).
-        
-        See `DECISIONS.md` D-12 for rationale and alternatives (Cohere, MixedBread, BGE).
-        """
         if not hits:
             return []
 
-        # Parse query terms for lexical matching
         query_terms = set(query.lower().split())
 
-        # Calculate lexical overlap score for each hit
         def calculate_score(hit: dict) -> float:
             content = hit["metadata"].get("content", "").lower()
             chunk_terms = set(content.split())
             overlap = len(query_terms & chunk_terms) / max(len(query_terms), 1)
-            
-            # Combine vector similarity (hit['score']) + lexical overlap
-            # Vector similarity is primary (0.7 weight), lexical is secondary (0.3 weight)
             return (0.7 * hit["score"]) + (0.3 * overlap)
 
-        # Sort hits by combined score, descending
         return sorted(hits, key=calculate_score, reverse=True)
 
     def _trim_to_token_budget(self, text: str, budget: int) -> str:

@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { AppToolbar } from "@/components/layout/AppToolbar";
 import { ConfigurationBanner } from "@/components/layout/ConfigurationBanner";
 
 import { cn } from "@/lib/utils";
@@ -13,6 +14,7 @@ export function AppShell() {
     <div className="flex min-h-screen items-stretch">
       <Sidebar />
       <main className="flex min-h-screen flex-1 flex-col">
+        <AppToolbar />
         <ConfigurationBanner />
         <div
           className={cn(

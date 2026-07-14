@@ -19,6 +19,12 @@ the UI can show how related each DIFF/MATCH pair is.
 from __future__ import annotations
 
 from app.application.agents.state import GraphState
+from app.application.comparison.chunk_pairs import build_doc_pair_chunk_lists
+from app.application.comparison.refiner import (
+    merge_comparison_reports,
+    reclassify_high_similarity_diffs,
+    should_supplement_llm_report,
+)
 from app.application.comparison.semantic_matcher import enrich_report_similarities
 from app.domain.entities.document import ComparisonReport, DiffItem, MatchItem, MissingItem
 from app.infrastructure.ai.llm_gateway import LLMGateway
@@ -86,6 +92,9 @@ categories and place it in the matching array:
 - match: the content is identical or semantically equivalent in both
   documents. Include the exact text from each side (textA, textB) and a
   combined source string like "docA.pdf / Page 2 + docB.docx / Page 2".
+  IMPORTANT: when the same section appears in both documents with the same
+  meaning (even if wording differs slightly), you MUST classify it as match,
+  not diff or missing. Do not skip stable/unchanged sections.
 
 - diff: the content exists in both documents but changed meaningfully
   (different value, condition, or wording that changes meaning). Include
@@ -95,10 +104,12 @@ categories and place it in the matching array:
 
 - missing: content present in ONE document with no counterpart in the
   other (covers both "added in B" and "removed from A" — direction is
-  clear from which document `source_file` names). Include the exact text,
-  which file it came from, and its location (e.g. "Page 12, Section 3.1").
+  clear from which document `source_file` names). Only use missing when
+  you have verified the topic truly has no counterpart in the other
+  document within the retrieved context.
 
 Rules:
+- Compare section-by-section when section headings align between documents.
 - Every item MUST include an exact, real source location drawn from the
   retrieved content's citation headers (format:
   "[chunk_id: ... | document (version) | section | page N]"). Use the
@@ -110,7 +121,9 @@ Rules:
 - `reason` / explanations must be written by you, specific to the actual
   content compared, not generic boilerplate.
 - Do not guess about content that wasn't actually retrieved. If nothing
-  relevant to a category was found, return an empty array for it."""
+  relevant to a category was found, return an empty array for it.
+- Prefer accurate classification over minimizing output: unchanged shared
+  content should appear in match, not be omitted."""
 
 
 def _row_diff(row: dict) -> DiffItem:
@@ -134,17 +147,24 @@ def _row_match(row: dict) -> MatchItem:
 
 
 class ComparisonAgent:
-    def __init__(self, llm: LLMGateway):
+    def __init__(self, llm: LLMGateway, vector_store=None):
         self._llm = llm
+        self._store = vector_store
 
     async def run(self, state: GraphState) -> GraphState:
         context = wrap_untrusted_content("retrieved_comparison_context", state.get("expanded_context", ""))
         query = state["user_query"]
+        doc_labels = _document_labels(state)
 
         try:
             result = await self._llm.chat_json(
                 system_prompt=_SYSTEM_PROMPT,
-                user_prompt=f"User's comparison focus: {query}\n\n{context}",
+                user_prompt=(
+                    f"User's comparison focus: {query}\n"
+                    f"Document A (older): {doc_labels.get('a', 'first document in scope')}\n"
+                    f"Document B (newer): {doc_labels.get('b', 'second document in scope')}\n\n"
+                    f"{context}"
+                ),
                 json_schema=_COMPARISON_SCHEMA,
                 schema_name="comparison_report",
                 model_tier="smart",
@@ -159,8 +179,6 @@ class ComparisonAgent:
                 diff=[_row_diff(row) for row in result["diff"]],
                 match=[_row_match(row) for row in result["match"]],
             )
-            # Sparse under rate-limit degradation: fall back only when the model
-            # produced essentially nothing useful across all three categories.
             total_rows = len(report.diff) + len(report.match) + len(report.missing)
             if total_rows == 0:
                 report = await self._fallback_compare(state)
@@ -171,9 +189,20 @@ class ComparisonAgent:
 
         try:
             report = await enrich_report_similarities(report, self._llm)
+            report = reclassify_high_similarity_diffs(report)
             state.setdefault("agent_trace", []).append("comparison_agent:similarity=enriched")
         except Exception:
             state.setdefault("agent_trace", []).append("comparison_agent:similarity=skipped")
+
+        if should_supplement_llm_report(report, state.get("retrieved_chunks", [])):
+            try:
+                supplement = await self._semantic_compare(state)
+                report = merge_comparison_reports(report, supplement)
+                report = await enrich_report_similarities(report, self._llm)
+                report = reclassify_high_similarity_diffs(report)
+                state.setdefault("agent_trace", []).append("comparison_agent:supplement=semantic")
+            except Exception:
+                state.setdefault("agent_trace", []).append("comparison_agent:supplement=skipped")
 
         state["comparison_report"] = report
         state.setdefault("agent_trace", []).append(
@@ -181,44 +210,47 @@ class ComparisonAgent:
         )
         return state
 
+    async def _semantic_compare(self, state: GraphState) -> ComparisonReport:
+        from app.application.comparison.semantic_matcher import detect_diffs_semantic
+
+        chunks_a, chunks_b = build_doc_pair_chunk_lists(
+            state.get("retrieved_chunks", []),
+            state.get("document_ids") or [],
+            self._store,
+        )
+        if not chunks_a or not chunks_b:
+            return ComparisonReport()
+        return await detect_diffs_semantic(chunks_a, chunks_b, self._llm)
+
     async def _fallback_compare(self, state: GraphState) -> ComparisonReport:
         """Prefer embedding-based matching; merge with lexical Jaccard when sparse."""
         from app.application.fallback.deterministic import deterministic_compare
 
         retrieved = state.get("retrieved_chunks", [])
-        lexical = deterministic_compare(retrieved)
+        lexical = deterministic_compare(retrieved, state.get("document_ids") or [])
         try:
-            from app.application.comparison.semantic_matcher import detect_diffs_semantic
-
-            by_doc: dict[str, list[dict]] = {}
-            for hit in retrieved:
-                meta = hit.get("metadata", {}) or {}
-                doc = str(meta.get("document") or "")
-                content = str(meta.get("content") or "")
-                if not doc or not content:
-                    continue
-                by_doc.setdefault(doc, []).append(
-                    {
-                        "text": content,
-                        "metadata": {
-                            "document": doc,
-                            "page": meta.get("page", 0),
-                            "section": meta.get("section", ""),
-                            "subsection_heading": meta.get("subsection_heading") or meta.get("heading") or "",
-                        },
-                    }
-                )
-            docs = list(by_doc.keys())
-            if len(docs) >= 2:
-                semantic = await detect_diffs_semantic(by_doc[docs[0]], by_doc[docs[1]], self._llm)
-                # Embedding match is better for MATCH; lexical Jaccard is often
-                # stronger at surfacing DIFF rows from short retrieved spans.
-                return ComparisonReport(
-                    missing=semantic.missing or lexical.missing,
-                    diff=semantic.diff or lexical.diff,
-                    match=semantic.match or lexical.match,
-                )
+            semantic = await self._semantic_compare(state)
+            return merge_comparison_reports(semantic, lexical)
         except Exception:
             pass
 
         return lexical
+
+
+def _document_labels(state: GraphState) -> dict[str, str]:
+    document_ids = state.get("document_ids") or []
+    labels: dict[str, str] = {}
+    by_id: dict[str, str] = {}
+    for hit in state.get("retrieved_chunks", []):
+        meta = hit.get("metadata", {}) or {}
+        doc_id = str(meta.get("document_id") or "")
+        doc_name = str(meta.get("document") or "")
+        version = str(meta.get("version") or "")
+        if doc_id and doc_name:
+            by_id[doc_id] = f"{doc_name} ({version})" if version else doc_name
+
+    if len(document_ids) >= 1 and document_ids[0] in by_id:
+        labels["a"] = by_id[document_ids[0]]
+    if len(document_ids) >= 2 and document_ids[1] in by_id:
+        labels["b"] = by_id[document_ids[1]]
+    return labels

@@ -61,7 +61,7 @@ def build_graph():
 
     router = RouterAgent(llm)
     retrieval = RetrievalAgent(llm, store)
-    comparison = ComparisonAgent(llm)
+    comparison = ComparisonAgent(llm, store)
     summary = SummaryAgent(llm)
     response = ResponseAgent(llm)
     validation = ValidationAgent(llm)

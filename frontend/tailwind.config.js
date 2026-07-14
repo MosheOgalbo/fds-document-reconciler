@@ -34,7 +34,7 @@ export default {
       },
       fontFamily: {
         display: ["'Source Serif 4'", "Georgia", "serif"],
-        sans: ["'IBM Plex Sans'", "system-ui", "sans-serif"],
+        sans: ["'IBM Plex Sans'", "'IBM Plex Sans Hebrew'", "system-ui", "sans-serif"],
         mono: ["'IBM Plex Mono'", "ui-monospace", "monospace"],
       },
       borderRadius: {

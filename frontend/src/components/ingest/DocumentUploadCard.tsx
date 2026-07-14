@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { UploadCloud, CheckCircle2, FileText, Loader2, FolderOpen, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,23 +12,22 @@ import { ingestDocument, ApiError } from "@/lib/api";
 import { useDocuments } from "@/lib/documentsContext";
 import { cn } from "@/lib/utils";
 
-const schema = z.object({
-  document_name: z.string().min(1, "Required"),
-  version: z.string().min(1, "Required"),
-});
-type FormValues = z.infer<typeof schema>;
-
 const ACCEPTED_EXTENSIONS = [".pdf", ".docx", ".dotx"];
+
+function parseFileMetadata(fileName: string): { document_name: string; version: string } {
+  const versionMatch = fileName.match(/(?:^|[._-])(v\d+(?:\.\d+)*)(?=\.[^.]+$|$)/i);
+  return {
+    document_name: fileName,
+    version: versionMatch ? versionMatch[1].toLowerCase() : "",
+  };
+}
 
 export function DocumentUploadCard({
   label,
-  defaultName,
-  defaultVersion,
 }: {
   label: "A" | "B";
-  defaultName: string;
-  defaultVersion: string;
 }) {
+  const { t } = useTranslation();
   const { docA, docB, setDocument } = useDocuments();
   const current = label === "A" ? docA : docB;
   const [file, setFile] = React.useState<File | null>(null);
@@ -35,18 +35,36 @@ export function DocumentUploadCard({
   const [isDragging, setIsDragging] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  const schema = React.useMemo(
+    () =>
+      z.object({
+        document_name: z.string().min(1, t("common.required")),
+        version: z.string().min(1, t("common.required")),
+      }),
+    [t],
+  );
+
+  type FormValues = z.infer<typeof schema>;
+
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { document_name: defaultName, version: defaultVersion },
+    defaultValues: { document_name: "", version: "" },
   });
+
+  React.useEffect(() => {
+    if (current && !file) {
+      reset({ document_name: current.document_name, version: current.version });
+    }
+  }, [current, file, reset]);
 
   const mutation = useMutation({
     mutationFn: (values: FormValues) => {
-      if (!file) throw new Error("Choose a file first");
+      if (!file) throw new Error(t("ingest.chooseFileFirst"));
       return ingestDocument(file, values.document_name, values.version);
     },
     onSuccess: (result, values) => {
@@ -58,11 +76,12 @@ export function DocumentUploadCard({
     if (!selected) return;
     const ext = selected.name.slice(selected.name.lastIndexOf(".")).toLowerCase();
     if (!ACCEPTED_EXTENSIONS.includes(ext)) {
-      setFileError(`Unsupported file type. Use ${ACCEPTED_EXTENSIONS.join(", ")}.`);
+      setFileError(t("ingest.unsupportedFileType", { extensions: ACCEPTED_EXTENSIONS.join(", ") }));
       return;
     }
     setFileError(null);
     setFile(selected);
+    reset(parseFileMetadata(selected.name));
   };
 
   const onBrowseClick = (e: React.MouseEvent) => {
@@ -86,11 +105,11 @@ export function DocumentUploadCard({
           >
             {label}
           </span>
-          <CardTitle className="text-base">Document {label}</CardTitle>
+          <CardTitle className="text-base">{t("common.document", { label })}</CardTitle>
         </div>
         {isReady && (
           <span className="flex items-center gap-1.5 text-xs font-medium text-match">
-            <CheckCircle2 size={14} /> Ready
+            <CheckCircle2 size={14} /> {t("status.ready")}
           </span>
         )}
       </CardHeader>
@@ -133,8 +152,8 @@ export function DocumentUploadCard({
                 </span>
                 <span className="text-xs text-ink-soft">
                   {file
-                    ? `${(file.size / 1024).toFixed(0)} KB · click or drop to replace`
-                    : `${current?.document_name} · ${current?.version} · ingested`}
+                    ? t("ingest.fileSizeReplace", { size: (file.size / 1024).toFixed(0) })
+                    : t("ingest.ingested", { name: current?.document_name, version: current?.version })}
                 </span>
                 {file && (
                   <Button
@@ -145,22 +164,27 @@ export function DocumentUploadCard({
                       e.stopPropagation();
                       setFile(null);
                       if (fileInputRef.current) fileInputRef.current.value = "";
+                      reset(
+                        current
+                          ? { document_name: current.document_name, version: current.version }
+                          : { document_name: "", version: "" },
+                      );
                     }}
                   >
-                    <X size={14} /> Clear selection
+                    <X size={14} /> {t("ingest.clearSelection")}
                   </Button>
                 )}
               </>
             ) : (
               <>
                 <UploadCloud className="text-ink-faint" size={28} />
-                <span className="text-sm font-medium text-ink">Click or drag & drop</span>
-                <span className="text-xs text-ink-soft">PDF or DOCX from your computer</span>
+                <span className="text-sm font-medium text-ink">{t("ingest.clickOrDrag")}</span>
+                <span className="text-xs text-ink-soft">{t("ingest.fileTypes")}</span>
               </>
             )}
             <Button type="button" variant="outline" size="sm" onClick={onBrowseClick}>
               <FolderOpen size={14} />
-              Browse files
+              {t("ingest.browseFiles")}
             </Button>
           </div>
 
@@ -168,42 +192,42 @@ export function DocumentUploadCard({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-ink-soft">Document name</label>
-              <Input {...register("document_name")} />
+              <label className="mb-1 block text-xs font-medium text-ink-soft">{t("ingest.documentName")}</label>
+              <Input {...register("document_name")} placeholder={t("ingest.documentNamePlaceholder")} />
               {errors.document_name && (
                 <p className="mt-1 text-xs text-missing">{errors.document_name.message}</p>
               )}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-ink-soft">Version label</label>
-              <Input {...register("version")} />
+              <label className="mb-1 block text-xs font-medium text-ink-soft">{t("ingest.versionLabel")}</label>
+              <Input {...register("version")} placeholder={t("ingest.versionPlaceholder")} />
               {errors.version && <p className="mt-1 text-xs text-missing">{errors.version.message}</p>}
             </div>
           </div>
 
           {mutation.isError && (
             <p className="rounded-md bg-missing-soft px-3 py-2 text-xs text-missing">
-              {mutation.error instanceof ApiError ? mutation.error.message : "Ingestion failed."}
+              {mutation.error instanceof ApiError ? mutation.error.message : t("ingest.ingestionFailed")}
             </p>
           )}
 
           <Button type="submit" variant="brass" className="w-full" disabled={!file || mutation.isPending}>
             {mutation.isPending && <Loader2 size={14} className="animate-spin" />}
-            {mutation.isPending ? "Ingesting…" : isReady ? "Re-ingest document" : "Ingest document"}
+            {mutation.isPending ? t("ingest.ingesting") : isReady ? t("ingest.reIngest") : t("ingest.ingestDocument")}
           </Button>
 
           {current && (
             <dl className="grid grid-cols-3 gap-2 rounded-md bg-paper px-3 py-3 font-mono text-[11px] text-ink-soft">
               <div>
-                <dt className="text-ink-faint">chunks</dt>
+                <dt className="text-ink-faint">{t("ingest.chunks")}</dt>
                 <dd className="text-base font-semibold text-ink">{current.chunks_created}</dd>
               </div>
               <div>
-                <dt className="text-ink-faint">parent</dt>
+                <dt className="text-ink-faint">{t("ingest.parent")}</dt>
                 <dd className="text-base font-semibold text-ink">{current.parent_chunks}</dd>
               </div>
               <div>
-                <dt className="text-ink-faint">child</dt>
+                <dt className="text-ink-faint">{t("ingest.child")}</dt>
                 <dd className="text-base font-semibold text-ink">{current.child_chunks}</dd>
               </div>
             </dl>

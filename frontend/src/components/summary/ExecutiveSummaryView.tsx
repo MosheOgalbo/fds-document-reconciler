@@ -1,13 +1,16 @@
+import { useTranslation } from "react-i18next";
 import { RankedChangeCard } from "@/components/summary/RankedChangeCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ExecutiveSummary } from "@/types/api";
 
 export function ExecutiveSummaryView({ summary }: { summary: ExecutiveSummary }) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-8">
       <section>
         <h2 className="mb-3 font-display text-lg font-semibold text-ink">
-          Top {summary.top_important_changes.length} Changes — Ranked by Business Importance
+          {t("summary.topChanges", { count: summary.top_important_changes.length })}
         </h2>
         <div className="space-y-3">
           {summary.top_important_changes
@@ -20,9 +23,9 @@ export function ExecutiveSummaryView({ summary }: { summary: ExecutiveSummary })
       </section>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <ImpactCard title="Business Impact" text={summary.business_impact} />
-        <ImpactCard title="Architecture Impact" text={summary.architecture_impact} />
-        <ImpactCard title="Workflow Impact" text={summary.workflow_impact} />
+        <ImpactCard title={t("summary.businessImpact")} text={summary.business_impact} />
+        <ImpactCard title={t("summary.architectureImpact")} text={summary.architecture_impact} />
+        <ImpactCard title={t("summary.workflowImpact")} text={summary.workflow_impact} />
       </section>
     </div>
   );

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import type { RankedChange } from "@/types/api";
 import { cn } from "@/lib/utils";
@@ -10,6 +11,8 @@ const severityVariant: Record<RankedChange["severity"], "missing" | "diff" | "br
 };
 
 export function RankedChangeCard({ change }: { change: RankedChange }) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex gap-4 rounded-lg border border-rule bg-paper-raised p-4">
       <div
@@ -23,11 +26,11 @@ export function RankedChangeCard({ change }: { change: RankedChange }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <h3 className="font-medium text-ink">{change.title}</h3>
-          <Badge variant={severityVariant[change.severity]}>{change.severity}</Badge>
+          <Badge variant={severityVariant[change.severity]}>{t(`status.${change.severity}`)}</Badge>
         </div>
         <p className="mt-1 text-sm text-ink-soft">{change.description}</p>
         <p className="mt-2 border-t border-rule pt-2 text-xs text-ink-faint">
-          <span className="font-medium text-brass-dark">Why it ranks here: </span>
+          <span className="font-medium text-brass-dark">{t("summary.whyRanks")} </span>
           {change.ranking_rationale}
         </p>
       </div>

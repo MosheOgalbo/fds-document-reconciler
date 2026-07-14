@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { Send, Loader2 } from "lucide-react";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import type { ChatMessage as ChatMessageType } from "@/types/api";
 type Scope = "A" | "B" | "cross";
 
 export function ChatPanel() {
+  const { t } = useTranslation();
   const { docA, docB } = useDocuments();
   const [scope, setScope] = React.useState<Scope>(docA && docB ? "cross" : docA ? "A" : "B");
   const [input, setInput] = React.useState("");
@@ -24,6 +26,9 @@ export function ChatPanel() {
       : scope === "A"
         ? [docA?.document_id].filter((id): id is string => Boolean(id))
         : [docB?.document_id].filter((id): id is string => Boolean(id));
+
+  const scopeLabel =
+    scope === "cross" ? t("chat.scopeBoth") : t("chat.scopeSingle", { label: scope });
 
   const mutation = useMutation({
     mutationFn: (text: string) =>
@@ -51,7 +56,10 @@ export function ChatPanel() {
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: error instanceof ApiError ? `Error: ${error.message}` : "Something went wrong.",
+          content:
+            error instanceof ApiError
+              ? t("chat.errorPrefix", { message: error.message })
+              : t("chat.somethingWrong"),
           createdAt: Date.now(),
         },
       ]);
@@ -78,21 +86,26 @@ export function ChatPanel() {
       <div className="flex items-center justify-between border-b border-rule px-5 py-3">
         <Tabs value={scope} onValueChange={(v) => setScope(v as Scope)}>
           <TabsList>
-            <TabsTrigger value="A" disabled={!docA}>Document A</TabsTrigger>
-            <TabsTrigger value="B" disabled={!docB}>Document B</TabsTrigger>
-            <TabsTrigger value="cross" disabled={!docA || !docB}>Cross-document</TabsTrigger>
+            <TabsTrigger value="A" disabled={!docA}>
+              {t("chat.scopeA")}
+            </TabsTrigger>
+            <TabsTrigger value="B" disabled={!docB}>
+              {t("chat.scopeB")}
+            </TabsTrigger>
+            <TabsTrigger value="cross" disabled={!docA || !docB}>
+              {t("chat.scopeCross")}
+            </TabsTrigger>
           </TabsList>
         </Tabs>
-        <span className="font-mono text-[11px] text-ink-faint">{documentIds.length} doc(s) in scope</span>
+        <span className="font-mono text-[11px] text-ink-faint">
+          {t("common.docInScope", { count: documentIds.length })}
+        </span>
       </div>
 
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto scrollbar-thin px-5 py-5">
         {messages.length === 0 && (
           <p className="pt-12 text-center text-sm text-ink-faint">
-            Ask a question about {scope === "cross" ? "both documents" : `Document ${scope}`}, or
-            ask to compare them / summarize changes — those render as structured cards right here
-            in the conversation. Answers
-            are grounded strictly in retrieved content, with citations.
+            {t("chat.emptyState", { scope: scopeLabel })}
           </p>
         )}
         {messages.map((m) => (
@@ -100,7 +113,7 @@ export function ChatPanel() {
         ))}
         {mutation.isPending && (
           <div className="flex items-center gap-2 text-sm text-ink-faint">
-            <Loader2 size={14} className="animate-spin" /> Retrieving and reasoning…
+            <Loader2 size={14} className="animate-spin" /> {t("chat.retrieving")}
           </div>
         )}
       </div>
@@ -115,7 +128,9 @@ export function ChatPanel() {
               handleSend();
             }
           }}
-          placeholder={documentIds.length === 0 ? "Load a document for this scope first…" : "Ask a question…"}
+          placeholder={
+            documentIds.length === 0 ? t("chat.placeholderNoDoc") : t("chat.placeholderAsk")
+          }
           disabled={documentIds.length === 0}
           rows={2}
         />
@@ -124,6 +139,7 @@ export function ChatPanel() {
           size="icon"
           onClick={handleSend}
           disabled={!input.trim() || documentIds.length === 0 || mutation.isPending}
+          aria-label={t("common.sendMessage")}
         >
           <Send size={16} />
         </Button>

@@ -32,6 +32,8 @@ async def execute(request: QueryRequest) -> QueryResponse:
     require_ai_services()
 
     cached = get_cached(request.query, request.document_ids)
+    if cached and cached.get("comparison"):
+        cached = None
     if cached:
         return QueryResponse(**cached)
 
@@ -78,7 +80,9 @@ async def execute(request: QueryRequest) -> QueryResponse:
         warnings=final_state.get("grounding_warnings", []),
         agent_trace=final_state.get("agent_trace", []),
     )
-    set_cached(request.query, request.document_ids, response.model_dump())
+    # Comparison/summary results depend on retrieval + alignment logic — avoid stale cache.
+    if intent not in ("compare_documents", "executive_summary"):
+        set_cached(request.query, request.document_ids, response.model_dump())
     return response
 
 

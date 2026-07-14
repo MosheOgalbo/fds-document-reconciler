@@ -57,8 +57,11 @@ export function ComparePage() {
       )}
 
       {mutation.isPending && (
-        <div className="flex items-center gap-3 rounded-lg border border-rule bg-paper-raised px-5 py-8 text-sm text-ink-soft">
-          <Spinner /> {t("compare.loading")}
+        <div className="space-y-2 rounded-lg border border-rule bg-paper-raised px-5 py-8 text-sm text-ink-soft">
+          <div className="flex items-center gap-3">
+            <Spinner /> {t("compare.loading")}
+          </div>
+          <p className="text-xs text-ink-faint">{t("compare.loadingDetail")}</p>
         </div>
       )}
 

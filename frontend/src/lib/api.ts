@@ -61,12 +61,29 @@ export async function ingestDocument(
 }
 
 export async function query(request: QueryRequest): Promise<QueryResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/query`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request),
-  });
-  return handleResponse<QueryResponse>(response);
+  const controller = new AbortController();
+  const timeoutMs = 180_000;
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+      signal: controller.signal,
+    });
+    return handleResponse<QueryResponse>(response);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError(
+        "Request timed out after 3 minutes. Compare and summary can take 30–90 seconds when the AI API is busy — try again shortly.",
+        408,
+      );
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 export async function checkHealth(): Promise<HealthResponse> {

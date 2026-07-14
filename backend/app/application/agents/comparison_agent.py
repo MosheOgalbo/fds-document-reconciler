@@ -27,6 +27,7 @@ from app.application.comparison.refiner import (
 )
 from app.application.comparison.semantic_matcher import enrich_report_similarities
 from app.domain.entities.document import ComparisonReport, DiffItem, MatchItem, MissingItem
+from app.infrastructure.ai.embed_service import embed_with_fallback
 from app.infrastructure.ai.llm_gateway import LLMGateway
 from app.infrastructure.security.prompt_injection import wrap_untrusted_content
 
@@ -188,7 +189,7 @@ class ComparisonAgent:
             state.setdefault("agent_trace", []).append("comparison_agent:fallback=deterministic_error")
 
         try:
-            report = await enrich_report_similarities(report, self._llm)
+            report = await enrich_report_similarities(report, self._llm, embed_fn=embed_with_fallback)
             report = reclassify_high_similarity_diffs(report)
             state.setdefault("agent_trace", []).append("comparison_agent:similarity=enriched")
         except Exception:
@@ -198,7 +199,7 @@ class ComparisonAgent:
             try:
                 supplement = await self._semantic_compare(state)
                 report = merge_comparison_reports(report, supplement)
-                report = await enrich_report_similarities(report, self._llm)
+                report = await enrich_report_similarities(report, self._llm, embed_fn=embed_with_fallback)
                 report = reclassify_high_similarity_diffs(report)
                 state.setdefault("agent_trace", []).append("comparison_agent:supplement=semantic")
             except Exception:
@@ -220,7 +221,7 @@ class ComparisonAgent:
         )
         if not chunks_a or not chunks_b:
             return ComparisonReport()
-        return await detect_diffs_semantic(chunks_a, chunks_b, self._llm)
+        return await detect_diffs_semantic(chunks_a, chunks_b, self._llm, embed_fn=embed_with_fallback)
 
     async def _fallback_compare(self, state: GraphState) -> ComparisonReport:
         """Prefer embedding-based matching; merge with lexical Jaccard when sparse."""

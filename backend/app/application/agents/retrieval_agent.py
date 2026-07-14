@@ -17,6 +17,7 @@ import logging
 from app.application.agents.state import GraphState
 from app.core.config import get_settings
 from app.core.tokens import truncate_to_token_budget
+from app.infrastructure.ai.embed_service import embed_with_fallback
 from app.infrastructure.ai.llm_gateway import LLMGateway
 from app.infrastructure.vectordb.pinecone_client import PineconeVectorStore
 
@@ -41,7 +42,7 @@ class RetrievalAgent:
         is_compare = intent in ("compare_documents", "executive_summary")
 
         try:
-            [query_embedding] = await self._llm.embed([query])
+            [query_embedding] = await embed_with_fallback(self._llm, [query])
             if is_compare and document_ids and len(document_ids) >= 2:
                 hits = self._compare_balanced_retrieval(query, query_embedding, document_ids)
             else:

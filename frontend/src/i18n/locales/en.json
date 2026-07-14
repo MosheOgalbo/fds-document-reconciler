@@ -10,7 +10,10 @@
     "freeChat": "Free Chat",
     "compare": "Compare",
     "ask": "Ask",
-    "executiveSummary": "Executive Summary"
+    "executiveSummary": "Executive Summary",
+    "mainNavigation": "Main navigation",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar"
   },
   "toolbar": {
     "language": "Language",
@@ -89,7 +92,8 @@
   "compare": {
     "title": "Comparison",
     "docsRequired": "Load both Document A and Document B to run a comparison.",
-    "loading": "Reading both documents and reconciling section by section — this can take a moment.",
+    "loading": "Reading both documents and reconciling section by section — this can take 30–90 seconds.",
+    "loadingDetail": "Running retrieval, comparison, and validation across both documents…",
     "failed": "Comparison failed.",
     "query": "Compare the two documents in full: what matches, what changed, and what is missing.",
     "emptyDiff": "No meaningfully changed sections were found.",

@@ -8,6 +8,7 @@ can show how related two paired spans are.
 from __future__ import annotations
 
 import math
+from collections.abc import Awaitable, Callable
 from typing import Protocol
 
 from app.domain.entities.document import ComparisonReport, DiffItem, MatchItem, MissingItem
@@ -19,6 +20,9 @@ MAX_ROWS_PER_CATEGORY = 24
 
 class Embedder(Protocol):
     async def embed(self, texts: list[str]) -> list[list[float]]: ...
+
+
+EmbedFn = Callable[..., Awaitable[list[list[float]]]]
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -50,6 +54,7 @@ async def detect_diffs_semantic(
     doc_b_chunks: list[dict],
     embedder: Embedder,
     *,
+    embed_fn: EmbedFn | None = None,
     match_threshold: float = MATCH_THRESHOLD,
     diff_threshold: float = DIFF_THRESHOLD,
     max_rows: int = MAX_ROWS_PER_CATEGORY,
@@ -85,8 +90,9 @@ async def detect_diffs_semantic(
 
     texts_a = [c["text"] for c in doc_a_chunks]
     texts_b = [c["text"] for c in doc_b_chunks]
-    emb_a = await embedder.embed(texts_a)
-    emb_b = await embedder.embed(texts_b)
+    _embed = embed_fn or (lambda llm, texts, **_: llm.embed(texts))
+    emb_a = await _embed(embedder, texts_a)
+    emb_b = await _embed(embedder, texts_b)
 
     # Section-aware pairing first, then global best-pair greedy alignment.
     pairs = _section_pair_candidates(doc_a_chunks, doc_b_chunks, emb_a, emb_b)
@@ -203,7 +209,12 @@ def _global_pair_candidates(
     return pairs
 
 
-async def enrich_report_similarities(report: ComparisonReport, embedder: Embedder) -> ComparisonReport:
+async def enrich_report_similarities(
+    report: ComparisonReport,
+    embedder: Embedder,
+    *,
+    embed_fn: EmbedFn | None = None,
+) -> ComparisonReport:
     """Attach cosine similarity scores to existing LLM/heuristic comparison rows."""
     pair_texts: list[tuple[str, str]] = []
     for d in report.diff:
@@ -216,8 +227,11 @@ async def enrich_report_similarities(report: ComparisonReport, embedder: Embedde
 
     left = [a for a, _ in pair_texts]
     right = [b for _, b in pair_texts]
-    emb_left = await embedder.embed(left)
-    emb_right = await embedder.embed(right)
+    _embed = embed_fn or (lambda llm, texts, **_: llm.embed(texts))
+    combined = await _embed(embedder, left + right)
+    split_at = len(left)
+    emb_left = combined[:split_at]
+    emb_right = combined[split_at:]
 
     idx = 0
     for d in report.diff:

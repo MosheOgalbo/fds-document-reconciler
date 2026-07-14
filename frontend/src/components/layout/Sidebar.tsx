@@ -1,74 +1,121 @@
 import { NavLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { FileStack, MessagesSquare, GitCompareArrows, ListOrdered, Sparkles } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { navItems } from "@/components/layout/nav-items";
+import { NavTooltip } from "@/components/ui/nav-tooltip";
+import { useSidebar } from "@/lib/sidebarContext";
 import { useDocuments } from "@/lib/documentsContext";
 import { cn } from "@/lib/utils";
 
-const navItems = [
-  { to: "/", key: "nav.documents", icon: FileStack, end: true as const },
-  { to: "/free-chat", key: "nav.freeChat", icon: Sparkles, end: false as const },
-  { to: "/compare", key: "nav.compare", icon: GitCompareArrows, end: false as const },
-  { to: "/chat", key: "nav.ask", icon: MessagesSquare, end: false as const },
-  { to: "/summary", key: "nav.executiveSummary", icon: ListOrdered, end: false as const },
-] as const;
-
 export function Sidebar() {
   const { t } = useTranslation();
+  const { collapsed, toggleCollapsed } = useSidebar();
   const { docA, docB } = useDocuments();
 
   return (
-    <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col bg-ink text-paper">
-      <div className="px-5 py-6">
-        <div className="font-display text-xl font-semibold tracking-tight">{t("app.title")}</div>
-        <div className="mt-1 text-xs text-paper/50">{t("app.subtitle")}</div>
+    <aside
+      className={cn(
+        "sticky top-0 hidden h-screen shrink-0 flex-col bg-ink text-paper transition-[width] duration-200 ease-out md:flex",
+        collapsed ? "w-[4.25rem]" : "w-64",
+      )}
+    >
+      <div className={cn("flex items-start gap-2 py-5", collapsed ? "flex-col px-2" : "px-5")}>
+        {!collapsed && (
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-xl font-semibold tracking-tight">{t("app.title")}</div>
+            <div className="mt-1 text-xs text-paper/50">{t("app.subtitle")}</div>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")}
+          title={collapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")}
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-paper/60 transition-colors hover:bg-white/10 hover:text-paper",
+            collapsed && "mx-auto",
+          )}
+        >
+          {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+        </button>
       </div>
 
-      <nav className="flex flex-col gap-0.5 px-3">
-        {navItems.map(({ to, key, icon: Icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isActive ? "bg-white/10 text-white" : "text-paper/60 hover:bg-white/5 hover:text-paper",
-              )
-            }
-          >
-            <Icon size={16} strokeWidth={2} />
-            {t(key)}
-          </NavLink>
-        ))}
+      <nav className="flex flex-col gap-0.5 px-2" aria-label={t("nav.mainNavigation")}>
+        {navItems.map(({ to, key, icon: Icon, end }) => {
+          const link = (
+            <NavLink
+              to={to}
+              end={end}
+              aria-label={t(key)}
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center rounded-md py-2 text-sm font-medium transition-colors",
+                  collapsed ? "justify-center px-2" : "gap-2.5 px-3",
+                  isActive ? "bg-white/10 text-white" : "text-paper/60 hover:bg-white/5 hover:text-paper",
+                )
+              }
+            >
+              <Icon size={18} strokeWidth={2} aria-hidden />
+              {!collapsed && <span className="truncate">{t(key)}</span>}
+            </NavLink>
+          );
+
+          return (
+            <div key={to}>
+              {collapsed ? <NavTooltip label={t(key)}>{link}</NavTooltip> : link}
+            </div>
+          );
+        })}
       </nav>
 
-      <div className="mt-auto px-5 py-5">
-        <div className="text-[11px] font-medium uppercase tracking-wider text-paper/40">{t("ledger.title")}</div>
-        <div className="mt-2 space-y-1.5 font-mono text-xs">
-          <DocStatus label="A" doc={docA} />
-          <DocStatus label="B" doc={docB} />
+      <div className={cn("mt-auto py-5", collapsed ? "px-2" : "px-5")}>
+        {!collapsed && (
+          <div className="text-[11px] font-medium uppercase tracking-wider text-paper/40">{t("ledger.title")}</div>
+        )}
+        <div className={cn("space-y-1.5 font-mono text-xs", !collapsed && "mt-2")}>
+          <DocStatus label="A" doc={docA} collapsed={collapsed} />
+          <DocStatus label="B" doc={docB} collapsed={collapsed} />
         </div>
       </div>
     </aside>
   );
 }
 
-function DocStatus({ label, doc }: { label: string; doc: { document_name: string; version: string } | null }) {
+function DocStatus({
+  label,
+  doc,
+  collapsed,
+}: {
+  label: string;
+  doc: { document_name: string; version: string } | null;
+  collapsed: boolean;
+}) {
   const { t } = useTranslation();
+  const statusText = doc ? `${doc.document_name} · ${doc.version}` : t("ledger.notLoaded");
+
+  const badge = (
+    <span
+      className={cn(
+        "flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-[10px] font-semibold",
+        doc ? "bg-brass text-white" : "bg-white/10 text-paper/40",
+      )}
+    >
+      {label}
+    </span>
+  );
+
+  if (collapsed) {
+    return (
+      <NavTooltip label={`${t("common.document", { label })}: ${statusText}`}>
+        <div className="flex justify-center py-0.5">{badge}</div>
+      </NavTooltip>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2">
-      <span
-        className={cn(
-          "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm text-[10px] font-semibold",
-          doc ? "bg-brass text-white" : "bg-white/10 text-paper/40",
-        )}
-      >
-        {label}
-      </span>
-      <span className={cn("truncate", doc ? "text-paper/80" : "text-paper/30")}>
-        {doc ? `${doc.document_name} · ${doc.version}` : t("ledger.notLoaded")}
-      </span>
+      {badge}
+      <span className={cn("truncate", doc ? "text-paper/80" : "text-paper/30")}>{statusText}</span>
     </div>
   );
 }
